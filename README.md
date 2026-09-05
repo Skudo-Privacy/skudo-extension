@@ -75,7 +75,7 @@ per quattro segnali), niente `psl` (100 KB per ricavare il nome di un dominio).
 
 ```
 npm install
-npm test          # 79 prove
+npm test          # 87 prove
 npm run build     # produce dist/
 npm run dev       # ricostruisce a ogni salvataggio
 npm run format
