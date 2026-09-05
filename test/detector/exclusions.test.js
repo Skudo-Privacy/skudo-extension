@@ -12,9 +12,15 @@ afterEach(cleanup)
  */
 describe('esclusioni', () => {
   const cases = [
-    ['casella di ricerca che filtra per email', '<input type="text" name="search_email" placeholder="Search by email">'],
+    [
+      'casella di ricerca che filtra per email',
+      '<input type="text" name="search_email" placeholder="Search by email">',
+    ],
     ['filtro di una tabella', '<input type="text" name="email" placeholder="Filter emails">'],
-    ['oggetto di un modulo di contatto', '<input type="text" name="email_subject" placeholder="Subject">'],
+    [
+      'oggetto di un modulo di contatto',
+      '<input type="text" name="email_subject" placeholder="Subject">',
+    ],
     ['codice sconto', '<input type="text" name="promo_code" placeholder="Discount code">'],
     ['codice di verifica', '<input type="text" name="otp_code" placeholder="Verification code">'],
     ['campo trappola', '<input type="text" name="email_honeypot" autocomplete="off">'],
@@ -51,7 +57,9 @@ describe('esclusioni', () => {
 
 describe('sanità fisica', () => {
   it('scarta un campo trappola largo un pixel', () => {
-    const container = mount('<form><input type="email" name="email"><button>Sign up</button></form>')
+    const container = mount(
+      '<form><input type="email" name="email"><button>Sign up</button></form>'
+    )
     const input = container.querySelector('input')
     const tinyEnv = envWith([[input, { width: 1, height: 1 }]])
     expect(findEmailFields(container, { env: tinyEnv })).toHaveLength(0)

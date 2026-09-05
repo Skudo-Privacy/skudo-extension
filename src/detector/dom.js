@@ -123,11 +123,7 @@ export function nearbyText(input) {
     parts.push(parent.textContent || '')
   }
 
-  return parts
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80)
+  return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
 /** Attributo in minuscolo, stringa vuota se assente. */

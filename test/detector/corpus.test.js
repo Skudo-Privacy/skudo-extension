@@ -82,13 +82,16 @@ describe('corpus', () => {
 
       expected.fields.forEach((want, index) => {
         const got = found[index]
-        const target = (expected.shadowHost ? container.querySelector(expected.shadowHost).shadowRoot : container)
-          .querySelector(want.selector)
+        const target = (
+          expected.shadowHost ? container.querySelector(expected.shadowHost).shadowRoot : container
+        ).querySelector(want.selector)
 
         expect(got.element, `campo ${index} sbagliato in ${file}`).toBe(target)
         expect(got.action, `azione sul campo ${index} in ${file}`).toBe(want.action)
         if (want.intent) {
-          expect(got.formIntent, `intento del modulo per il campo ${index} in ${file}`).toBe(want.intent)
+          expect(got.formIntent, `intento del modulo per il campo ${index} in ${file}`).toBe(
+            want.intent
+          )
         }
       })
     })

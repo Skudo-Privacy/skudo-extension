@@ -70,7 +70,9 @@ export const SIGNALS = [
     calibrated: true,
     test: (input) =>
       ['id', 'name'].some((name) => EMAIL_EXACT.test(attr(input, name))) ||
-      attr(input, 'autocomplete').split(/\s+/).some((token) => EMAIL_EXACT.test(token)),
+      attr(input, 'autocomplete')
+        .split(/\s+/)
+        .some((token) => EMAIL_EXACT.test(token)),
   },
   {
     name: 'placeholderMatchesEmail',

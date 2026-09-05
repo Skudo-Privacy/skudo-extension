@@ -16,9 +16,26 @@ import { attr, wordish } from './dom.js'
 
 /** Tipi di input che non possono contenere un indirizzo, qualunque cosa dica il nome. */
 const IMPOSSIBLE_TYPES = new Set([
-  'password', 'checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'hidden',
-  'image', 'range', 'color', 'date', 'datetime-local', 'month', 'week', 'time',
-  'number', 'tel', 'url', 'search',
+  'password',
+  'checkbox',
+  'radio',
+  'submit',
+  'button',
+  'reset',
+  'file',
+  'hidden',
+  'image',
+  'range',
+  'color',
+  'date',
+  'datetime-local',
+  'month',
+  'week',
+  'time',
+  'number',
+  'tel',
+  'url',
+  'search',
 ])
 
 /**
@@ -104,7 +121,11 @@ export function exclusionReason(el) {
   // Una form di ricerca contiene campi che parlano di email senza esserlo
   // ("cerca fra i tuoi messaggi"). Il ruolo del contenitore vale per tutti.
   const form = el.form
-  if (form && (attr(form, 'role') === 'search' || wordish('search|cerca').test(attr(form, 'id') + ' ' + attr(form, 'class')))) {
+  if (
+    form &&
+    (attr(form, 'role') === 'search' ||
+      wordish('search|cerca').test(attr(form, 'id') + ' ' + attr(form, 'class')))
+  ) {
     return 'form:search'
   }
 

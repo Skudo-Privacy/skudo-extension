@@ -147,7 +147,9 @@ export function findEmailFields(root = globalThis.document, options = {}) {
  * agli strumenti di verifica sul corpus, non al funzionamento normale.
  */
 export function explainRoot(root = globalThis.document, options = {}) {
-  return queryDeep(root, 'input').map((input) => evaluateField(input, { ...options, explain: true }))
+  return queryDeep(root, 'input').map((input) =>
+    evaluateField(input, { ...options, explain: true })
+  )
 }
 
 export { detectFormIntent, exclusionReason }

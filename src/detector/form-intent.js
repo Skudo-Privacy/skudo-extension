@@ -71,7 +71,10 @@ export function formScopeFor(input) {
 /** Testo dei pulsanti che sembrano l'invio del modulo. */
 function submitTexts(scope) {
   const texts = []
-  for (const el of queryDeep(scope, 'button, input[type=submit], input[type=button], [role=button]')) {
+  for (const el of queryDeep(
+    scope,
+    'button, input[type=submit], input[type=button], [role=button]'
+  )) {
     const value = el.nodeName === 'INPUT' ? el.getAttribute('value') : el.textContent
     const text = (value || '').replace(/\s+/g, ' ').trim()
     // Un pulsante con dentro un romanzo non è il pulsante di invio.
@@ -136,11 +139,17 @@ export function detectFormIntent(input) {
   if (checkboxes.length > 0 && TERMS_WORDS.test(scopeText)) add(3, 'terms-acceptance')
 
   // Come si chiama il modulo, quando si degna di dirlo.
-  const identity = [attr(scope, 'id'), attr(scope, 'class'), attr(scope, 'name'), attr(scope, 'action')].join(' ')
+  const identity = [
+    attr(scope, 'id'),
+    attr(scope, 'class'),
+    attr(scope, 'name'),
+    attr(scope, 'action'),
+  ].join(' ')
   if (SIGNUP_WORDS.test(identity)) add(3, 'scope-name:signup')
   else if (LOGIN_WORDS.test(identity)) add(-3, 'scope-name:login')
 
-  const intent = score >= DECISION_THRESHOLD ? 'signup' : score <= -DECISION_THRESHOLD ? 'login' : 'unknown'
+  const intent =
+    score >= DECISION_THRESHOLD ? 'signup' : score <= -DECISION_THRESHOLD ? 'login' : 'unknown'
 
   return { intent, score, signals }
 }

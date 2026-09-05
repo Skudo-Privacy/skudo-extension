@@ -42,7 +42,7 @@ describe('strato 2: punteggio sui segnali', () => {
     expect(field.signals).toContain('labelMatchesEmail')
   })
 
-  it('riconosce una <label> che punta al name invece che all\'id', () => {
+  it("riconosce una <label> che punta al name invece che all'id", () => {
     // Errore di scrittura frequente: `for` dovrebbe puntare all'`id`. Il campo
     // resta un campo email anche se chi l'ha scritto ha sbagliato.
     const field = detectOne(
@@ -61,7 +61,7 @@ describe('strato 2: punteggio sui segnali', () => {
     expect(field?.signals).toContain('attrsContainEmail')
   })
 
-  it('riconosce il testo vicino quando non c\'è nessuna label', () => {
+  it("riconosce il testo vicino quando non c'è nessuna label", () => {
     const field = detectOne(signup('<div><span>Email</span><input type="text" name="c1"></div>'))
     expect(field?.signals).toContain('nearbyTextMatchesEmail')
   })
@@ -70,7 +70,9 @@ describe('strato 2: punteggio sui segnali', () => {
     // "Non condivideremo mai la tua email con nessuno" come placeholder non
     // rende quel campo un campo email.
     const field = detectOne(
-      signup('<input type="text" name="c2" placeholder="We will never share your email with anyone, ever">')
+      signup(
+        '<input type="text" name="c2" placeholder="We will never share your email with anyone, ever">'
+      )
     )
     expect(field).toBeNull()
   })
@@ -120,7 +122,13 @@ describe('autocomplete come sequenza di token', () => {
   // Lo standard prevede prefissi di sezione e di contesto. Trattare
   // l'attributo come un valore unico scarta campi dichiarati correttamente,
   // e lo fa proprio nelle casse dei negozi.
-  const valid = ['email', 'shipping email', 'billing email', 'section-work shipping email', 'email webauthn']
+  const valid = [
+    'email',
+    'shipping email',
+    'billing email',
+    'section-work shipping email',
+    'email webauthn',
+  ]
 
   for (const value of valid) {
     it(`riconosce autocomplete="${value}"`, () => {

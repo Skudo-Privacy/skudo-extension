@@ -27,7 +27,8 @@ export const api = globalThis.browser ?? globalThis.chrome
  * permessi facoltativi, che su Firefox si possono chiedere solo da un gesto
  * dell'utente.
  */
-export const isGecko = typeof globalThis.browser !== 'undefined' && !!globalThis.browser.runtime?.getBrowserInfo
+export const isGecko =
+  typeof globalThis.browser !== 'undefined' && !!globalThis.browser.runtime?.getBrowserInfo
 
 /** Il contesto di sfondo è un service worker (Chromium) o una event page (Gecko)? */
 export const isServiceWorker = typeof globalThis.ServiceWorkerGlobalScope !== 'undefined'

@@ -2,8 +2,9 @@
 
 Crea un alias email invece di dare il proprio indirizzo vero.
 
-Stato: **fase 1**. Il motore di rilevamento dei campi è completo e verificato.
-L'estensione attorno non è ancora costruita.
+Stato: **si carica e funziona**. Rilevamento, contesto di sfondo, content
+script e popup sono scritti e provati; mancano il token ad ambito ristretto
+lato server e la pubblicazione sugli store.
 
 ## Perché non è un fork
 
@@ -53,14 +54,42 @@ Gli altri sono nostri, messi a mano, e vanno rifatti con una regressione quando
 il corpus sarà fatto di catture reali invece che di moduli scritti a mano sui
 modelli ricorrenti.
 
+## Peso
+
+Il content script viene caricato su ogni pagina che l'utente apre, quindi il
+peso è un requisito e non un dettaglio.
+
+```
+background.js    6.0 KB
+content.js      10.6 KB
+popup.js         4.6 KB
+```
+
+Il pacchetto intero sta in 80 KB, contro alcune centinaia delle estensioni
+equivalenti. Le tre scelte che lo permettono: niente `webextension-polyfill`
+(30 KB, non più necessario da Manifest V3), niente libreria Fathom (2.739 righe
+per quattro segnali), niente `psl` (100 KB per ricavare il nome di un dominio).
+
 ## Comandi
 
 ```
 npm install
-npm test          # 51 prove
-npm run test:watch
+npm test          # 62 prove
+npm run build     # produce dist/
+npm run dev       # ricostruisce a ogni salvataggio
 npm run format
 ```
+
+Per caricarla in un browser: vedi [docs/BROWSERS.md](docs/BROWSERS.md).
+
+## Cosa manca
+
+- **Token ad ambito ristretto**, lato Skudo. Oggi l'estensione usa un token
+  Sanctum pieno: chi riesce a leggerlo può cancellare l'account. Va aggiunto un
+  tipo di token che possa solo creare e leggere alias.
+- **Catture reali** nel corpus, per calibrare i pesi messi a mano.
+- **Prova sui browser veri**, Mullvad Browser e LibreWolf compresi.
+- **Pubblicazione** sugli store.
 
 ## Documenti
 

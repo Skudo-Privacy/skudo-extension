@@ -41,7 +41,11 @@ export function createEnv(view = globalThis.window) {
  * anche quello renderebbe i test dei campi nascosti una finzione che non prova
  * niente.
  */
-export function createFakeEnv({ rects = new Map(), styles = new Map(), view = globalThis.window } = {}) {
+export function createFakeEnv({
+  rects = new Map(),
+  styles = new Map(),
+  view = globalThis.window,
+} = {}) {
   const defaultRect = { width: 220, height: 32, top: 100, left: 20, bottom: 132, right: 240 }
 
   return {
