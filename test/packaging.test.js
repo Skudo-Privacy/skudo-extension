@@ -55,6 +55,23 @@ describe('invarianti di sicurezza', () => {
     expect(content).not.toMatch(/\bfetch\s*\(/)
   })
 
+  it("l'indirizzo del server non è un'impostazione modificabile", () => {
+    // Un campo dove scrivere il server è un posto dove chiunque riesca a
+    // farsi digitare un indirizzo diverso dirotta l'intero collegamento. È
+    // fissato al momento della costruzione: vedi src/shared/config.js.
+    const config = readFileSync(join(src, 'shared', 'config.js'), 'utf8')
+    expect(config).toMatch(/__SKUDO_INSTANCE__/)
+
+    const storage = withoutComments(readFileSync(join(src, 'shared', 'storage.js'), 'utf8'))
+    expect(storage).not.toMatch(/instance/)
+
+    for (const page of ['popup.html', 'connect.html']) {
+      expect(readFileSync(join(src, page), 'utf8'), `${page} chiede ancora il server`).not.toMatch(
+        /id="instance"/
+      )
+    }
+  })
+
   it('il segreto del collegamento non passa dalla pagina che guida il flusso', () => {
     // connect.html mostra quattro caratteri e aspetta. Il segreto che ritira
     // il token resta nel contesto di sfondo: se non passa di qui, non può

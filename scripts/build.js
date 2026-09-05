@@ -27,8 +27,15 @@ const production = process.argv.includes('--production')
 await rm(out, { recursive: true, force: true })
 await mkdir(out, { recursive: true })
 
+/**
+ * Il server a cui parla questa versione. Non è un'impostazione dell'utente:
+ * vedi src/shared/config.js per il perché. Si cambia solo qui, ricostruendo.
+ */
+const instance = process.env.SKUDO_INSTANCE || 'https://app.skudo.org'
+
 const options = {
   bundle: true,
+  define: { __SKUDO_INSTANCE__: JSON.stringify(instance) },
   format: 'iife',
   target: ['firefox115', 'chrome115'],
   minify: production,
@@ -78,4 +85,5 @@ if (watch) {
     })
   )
   console.log(sizes.join('\n'))
+  console.log(`\n  server        ${instance}`)
 }

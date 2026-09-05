@@ -266,7 +266,6 @@ async function init() {
   state = await send('GET_STATE')
   applyTheme(state.theme)
 
-  $('instance').value = state.instance
   $('opt-menu').checked = state.contextMenu
   $('opt-describe').checked = state.describeWithSite
   $('opt-format').value = state.format
@@ -304,21 +303,6 @@ $('settings-toggle').addEventListener('click', () => {
 $('connect').addEventListener('click', async () => {
   await api.tabs.create({ url: api.runtime.getURL('connect.html') })
   window.close()
-})
-
-$('signin').addEventListener('click', async () => {
-  const button = $('signin')
-  showError('signin-error', '')
-  button.disabled = true
-  try {
-    await send('SIGN_IN', { instance: $('instance').value.trim(), token: $('token').value.trim() })
-    $('token').value = ''
-    await init()
-  } catch (error) {
-    showError('signin-error', error.message)
-  } finally {
-    button.disabled = false
-  }
 })
 
 $('signout').addEventListener('click', async () => {

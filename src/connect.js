@@ -48,26 +48,29 @@ function show(step) {
  * ------------------------------------------------------------------ */
 
 async function begin() {
-  const instance = $('instance').value.trim()
-  $('server-error').hidden = true
-  $('begin').disabled = true
+  show('waiting')
+  $('error').hidden = true
+  $('code').textContent = '····'
 
+  let pairing
   try {
-    const pairing = await send('PAIR_START', { instance, label: describeBrowser() })
-
-    $('code').textContent = pairing.confirmationCode
-    connectUrl = pairing.connectUrl
-    deadline = Date.now() + pairing.expiresIn * 1000
-    show('waiting')
-
-    await openConsentTab()
-    poll(pairing.interval * 1000)
+    pairing = await send('PAIR_START', { label: describeBrowser() })
   } catch (error) {
-    $('server-error').textContent = error.message
-    $('server-error').hidden = false
-  } finally {
-    $('begin').disabled = false
+    // L'errore resta su questa schermata invece di rimbalzare altrove: chi
+    // legge sta aspettando un codice, e spostarlo su una pagina diversa gli
+    // farebbe perdere il filo di cosa stava facendo.
+    $('code').textContent = '—'
+    $('error').textContent = error.message
+    $('error').hidden = false
+    return
   }
+
+  $('code').textContent = pairing.confirmationCode
+  connectUrl = pairing.connectUrl
+  deadline = Date.now() + pairing.expiresIn * 1000
+
+  await openConsentTab()
+  poll(pairing.interval * 1000)
 }
 
 async function openConsentTab() {
@@ -130,31 +133,10 @@ function expire() {
  * Avvio della pagina
  * ------------------------------------------------------------------ */
 
-async function init() {
-  const state = await send('GET_STATE')
-  $('instance').value = state.instance
-  show('server')
+// Non c'è niente da chiedere prima di cominciare: il server è uno solo e lo
+// sa già il pacchetto. Vedi src/shared/config.js.
+begin()
 
-  // Il caso normale è che il server sia quello predefinito e non ci sia niente
-  // da scegliere: si parte da soli, e il campo resta lì per chi si autocolloca
-  // e preme indietro.
-  if (state.instance) begin()
-}
-
-$('begin').addEventListener('click', begin)
-$('retry').addEventListener('click', () => {
-  show('server')
-  begin()
-})
+$('retry').addEventListener('click', begin)
 $('reopen').addEventListener('click', openConsentTab)
-
-// Via d'uscita per chi si autocolloca: senza, la pagina parte da sola verso
-// il server predefinito e non c'è modo di cambiarlo.
-$('change-server').addEventListener('click', () => {
-  clearTimeout(pollTimer)
-  send('PAIR_CANCEL').catch(() => {})
-  show('server')
-})
 $('close').addEventListener('click', () => window.close())
-
-init()

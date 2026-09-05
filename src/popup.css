@@ -362,25 +362,3 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
-
-/* Ripiego con chiave API -------------------------------------------- */
-
-.manual {
-  margin-top: 18px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-
-.manual summary {
-  cursor: pointer;
-  color: var(--ink-dim);
-  font-size: 13px;
-}
-
-.manual summary:hover {
-  color: var(--ink);
-}
-
-.manual .field:first-of-type {
-  margin-top: 14px;
-}

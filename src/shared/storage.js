@@ -27,7 +27,6 @@ const TOKEN_KEY = 'apiToken'
 /** @typedef {'random_characters'|'uuid'|'random_words'|'custom'} AliasFormat */
 
 const DEFAULTS = {
-  instance: 'https://app.skudo.org',
   domain: 'skudo.me',
   format: 'random_characters',
   /** Icona nei campi email delle pagine. Spenta finché l'utente non la accende. */

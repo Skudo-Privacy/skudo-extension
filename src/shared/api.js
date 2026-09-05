@@ -10,6 +10,8 @@
  * degli errori. Qui c'è un punto solo: quando l'API cambia, cambia qui.
  */
 
+import { INSTANCE } from './config.js'
+
 /** L'API risponde entro pochi secondi o non risponde. */
 const TIMEOUT_MS = 15000
 
@@ -24,15 +26,13 @@ export class ApiError extends Error {
 
 export class SkudoApi {
   /**
-   * @param {{instance: string, token: string}} config
+   * @param {{token: string}} config
    */
-  constructor({ instance, token }) {
-    this.instance = String(instance || '').replace(/\/+$/, '')
+  constructor({ token }) {
     this.token = token
   }
 
   async request(path, { method = 'GET', body } = {}) {
-    if (!this.instance) throw new ApiError('No instance configured', { code: 'NO_INSTANCE' })
     if (!this.token) throw new ApiError('Not signed in', { code: 'UNAUTHENTICATED' })
 
     const controller = new AbortController()
@@ -40,7 +40,7 @@ export class SkudoApi {
 
     let response
     try {
-      response = await fetch(`${this.instance}${path}`, {
+      response = await fetch(`${INSTANCE}${path}`, {
         method,
         signal: controller.signal,
         headers: {

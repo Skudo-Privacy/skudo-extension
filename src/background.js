@@ -9,6 +9,7 @@
 
 import { SkudoApi, aliasEmail } from './shared/api.js'
 import { api } from './shared/browser.js'
+import { INSTANCE } from './shared/config.js'
 import { forgetSecret, rememberSecret, readSecret } from './shared/pairing.js'
 import { clearToken, getSettings, getToken, setSettings, setToken } from './shared/storage.js'
 
@@ -17,8 +18,7 @@ const CONTENT_SCRIPT_ID = 'skudo-field-icon'
 
 /** Costruisce il client leggendo token e impostazioni al momento dell'uso. */
 async function client() {
-  const [{ instance }, token] = await Promise.all([getSettings(), getToken()])
-  return new SkudoApi({ instance, token })
+  return new SkudoApi({ token: await getToken() })
 }
 
 /**
@@ -109,22 +109,34 @@ const handlers = {
    * Anche se quella pagina è nostra, un segreto che non le passa non può
    * finire in un registro, in uno screenshot o nella cronologia.
    */
-  async PAIR_START({ instance, label }) {
-    const base = String(instance || '').replace(/\/+$/, '')
-    const response = await fetch(`${base}/api/v1/extension/pair`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label }),
-      credentials: 'omit',
-    })
+  async PAIR_START({ label }) {
+    let response
+    try {
+      response = await fetch(`${INSTANCE}/api/v1/extension/pair`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+        credentials: 'omit',
+      })
+    } catch {
+      throw new Error('Could not reach Skudo. Check your connection and try again.')
+    }
 
-    if (!response.ok) throw new Error('Could not reach that Skudo server.')
+    // Un 404 qui non è un guasto di rete: è un server che non ha ancora
+    // questa funzione. Dirlo cambia cosa fa l'utente dopo, e il messaggio
+    // generico lo mandava a controllare la connessione per niente.
+    if (response.status === 404) {
+      throw new Error('This Skudo server does not support one-click connect yet.')
+    }
+    if (response.status === 429) {
+      throw new Error('Too many attempts. Wait a minute and try again.')
+    }
+    if (!response.ok) {
+      throw new Error('Skudo could not start the connection. Try again shortly.')
+    }
 
     const data = await response.json()
     await rememberSecret(api, data.secret)
-    // L'indirizzo del server si salva adesso: da qui in poi tutte le chiamate
-    // vanno lì, e chi si autocolloca deve poterlo cambiare una volta sola.
-    await setSettings({ instance: base })
 
     return {
       confirmationCode: data.confirmation_code,
@@ -141,8 +153,7 @@ const handlers = {
     const secret = await readSecret(api)
     if (!secret) return { status: 'expired' }
 
-    const { instance } = await getSettings()
-    const response = await fetch(`${instance}/api/v1/extension/pair/claim`, {
+    const response = await fetch(`${INSTANCE}/api/v1/extension/pair/claim`, {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({ secret }),
@@ -168,16 +179,6 @@ const handlers = {
   async PAIR_CANCEL() {
     await forgetSecret(api)
     return { cancelled: true }
-  },
-
-  async SIGN_IN({ instance, token }) {
-    const skudo = new SkudoApi({ instance, token })
-    // Si verifica prima di salvare: una chiave sbagliata deve dare un errore
-    // adesso, non fra tre giorni davanti a un modulo di iscrizione.
-    await skudo.verifyToken()
-    await setSettings({ instance })
-    await setToken(token)
-    return { signedIn: true }
   },
 
   async SIGN_OUT() {

@@ -26,30 +26,6 @@
         Opens a Skudo tab where you approve it. Nothing to copy, and the
         extension only gets permission to make aliases.
       </p>
-
-      <!--
-        Ripiego per chi si autocolloca su una versione più vecchia, dove le
-        rotte di collegamento non esistono ancora. Chiuso di partenza: è la
-        strada peggiore, e non deve sembrare la normale.
-      -->
-      <details class="manual">
-        <summary>Use an API key instead</summary>
-        <label class="field">
-          <span class="field__label">Server</span>
-          <input type="url" id="instance" spellcheck="false" autocomplete="off" />
-        </label>
-        <label class="field">
-          <span class="field__label">API key</span>
-          <input type="password" id="token" spellcheck="false" autocomplete="off" />
-          <span class="field__hint">
-            Stored on this device only, never synced. An API key made this way
-            can do everything your account can.
-          </span>
-        </label>
-        <button type="button" id="signin" class="button button--quiet">Sign in with a key</button>
-      </details>
-
-      <p class="error" id="signin-error" hidden></p>
     </section>
 
     <!-- Schermata principale -->

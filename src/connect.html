@@ -13,18 +13,6 @@
         <span>Skudo</span>
       </header>
 
-      <!-- Server, solo per chi si autocolloca -->
-      <section id="step-server" class="step" hidden>
-        <h1>Connect this browser</h1>
-        <p class="lede">One click, no keys to copy.</p>
-        <label class="field">
-          <span class="field__label">Server</span>
-          <input type="url" id="instance" spellcheck="false" autocomplete="off" />
-        </label>
-        <button type="button" id="begin" class="button button--primary">Continue</button>
-        <p class="error" id="server-error" hidden></p>
-      </section>
-
       <!-- Codice + attesa -->
       <section id="step-waiting" class="step" hidden>
         <h1>Check this code</h1>
@@ -35,15 +23,14 @@
 
         <div class="code" id="code" aria-live="polite"></div>
 
+        <p class="error" id="error" hidden></p>
+
         <p class="waiting">
           <span class="spinner spinner--dark"></span>
           <span>Waiting for you to approve</span>
         </p>
 
         <button type="button" id="reopen" class="button button--quiet">Reopen the Skudo tab</button>
-        <p class="note">
-          <button type="button" id="change-server" class="linkish">Connecting to your own server?</button>
-        </p>
         <p class="note">
           If the codes do not match, press Cancel there and close this page:
           the request did not come from this browser.
