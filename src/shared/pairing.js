@@ -15,29 +15,31 @@
  *
  * ## Come funziona qui
  *
- * È la forma del device authorization grant (RFC 8628), quello dei televisori,
- * con l'aggiunta del confronto di un codice.
+ * È la forma del device authorization grant (RFC 8628), quello dei televisori.
  *
  *   1. l'estensione apre una richiesta e riceve un segreto lungo;
- *   2. mostra quattro caratteri e apre la pagina di approvazione su Skudo;
- *   3. l'utente controlla che i quattro caratteri combacino e approva;
+ *   2. apre la pagina di approvazione su Skudo, dove l'utente è già dentro;
+ *   3. l'utente approva;
  *   4. l'estensione presenta il segreto e ritira un token **ristretto**.
  *
  * Niente URL di ritorno da validare (su Gecko cambia a ogni installazione),
  * niente permessi sui siti, niente chiave negli appunti. E il token che ne esce
  * può creare e leggere alias, non toccare l'account.
  *
- * ## I quattro caratteri
+ * ## Cosa questo schema non ferma
  *
- * Sono l'unica difesa contro l'attacco vero a questo schema: aprire una
- * richiesta propria e convincere la vittima ad approvarla con un link mandato
- * per email. La vittima vedrebbe una pagina autentica, sul dominio autentico,
- * mentre è già dentro. Se il codice sulla pagina non è quello che l'estensione
- * ha appena mostrato, la richiesta non è partita da lì.
+ * Aprire una richiesta non richiede di essere nessuno, quindi qualcuno può
+ * aprirne una sua e convincere la vittima ad approvarla con un link mandato
+ * per email: la vittima vedrebbe una pagina autentica, sul dominio autentico,
+ * mentre è già dentro.
  *
- * Per questo il codice va mostrato dove resta visibile mentre l'utente guarda
- * un'altra scheda, cioè in una pagina dell'estensione e non nel popup, che si
- * chiude appena si cambia finestra.
+ * C'era un codice da confrontare fra questa pagina e quella di approvazione,
+ * che chiudeva la strada; è stato rimosso perché il passo di attenzione
+ * costava più di quanto rendesse. Restano a difesa la durata di due minuti, il
+ * segreto spendibile una volta sola, e il fatto che il token che ne esce può
+ * creare e leggere alias e nient'altro: chi riuscisse nell'inganno non
+ * arriverebbe comunque all'account.
+ *
  */
 
 /** Dove sta il segreto mentre la richiesta è aperta. */

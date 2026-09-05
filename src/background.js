@@ -105,9 +105,9 @@ const handlers = {
    * Apre una richiesta di collegamento.
    *
    * Il segreto resta nel contesto di sfondo: alla pagina che guida il flusso
-   * tornano solo i quattro caratteri da mostrare e l'indirizzo da aprire.
-   * Anche se quella pagina è nostra, un segreto che non le passa non può
-   * finire in un registro, in uno screenshot o nella cronologia.
+   * torna solo l'indirizzo da aprire. Anche se quella pagina è nostra, un
+   * segreto che non le passa non può finire in un registro, in uno screenshot
+   * o nella cronologia.
    */
   async PAIR_START({ label }) {
     let response
@@ -139,7 +139,6 @@ const handlers = {
     await rememberSecret(api, data.secret)
 
     return {
-      confirmationCode: data.confirmation_code,
       connectUrl: data.connect_url,
       interval: data.interval,
       expiresIn: data.expires_in,

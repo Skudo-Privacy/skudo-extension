@@ -73,9 +73,9 @@ describe('invarianti di sicurezza', () => {
   })
 
   it('il segreto del collegamento non passa dalla pagina che guida il flusso', () => {
-    // connect.html mostra quattro caratteri e aspetta. Il segreto che ritira
-    // il token resta nel contesto di sfondo: se non passa di qui, non può
-    // finire in una schermata, in un registro o nella cronologia.
+    // connect.html apre la scheda di approvazione e aspetta. Il segreto che
+    // ritira il token resta nel contesto di sfondo: se non passa di qui, non
+    // può finire in una schermata, in un registro o nella cronologia.
     const connect = withoutComments(readFileSync(join(src, 'connect.js'), 'utf8'))
     expect(connect).not.toMatch(/secret/i)
     expect(connect).not.toMatch(/\bfetch\s*\(/)

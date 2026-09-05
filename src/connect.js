@@ -3,13 +3,7 @@
  *
  * ## Perché una pagina e non il popup
  *
- * Due ragioni, entrambe vincolanti.
- *
- * Il codice di conferma va confrontato con quello mostrato sulla scheda di
- * Skudo. Un popup si chiude nel momento esatto in cui l'utente guarda altrove,
- * cioè proprio quando dovrebbe leggerlo.
- *
- * E l'attesa dura fino a due minuti. Il contesto di sfondo viene spento quando
+ * L'attesa dura fino a due minuti. Il contesto di sfondo viene spento quando
  * è inattivo — su Chromium è un service worker, su Gecko una event page — e un
  * ciclo di attesa avviato lì non sopravvive: `alarms` ha una granularità di un
  * minuto, troppo grossa per una richiesta che ne vive due. Una scheda aperta
@@ -17,8 +11,7 @@
  * sfondo per il tempo che serve.
  *
  * Il segreto non passa mai di qui: questa pagina chiede allo sfondo di aprire
- * la richiesta e di ritirare l'esito, e riceve solo i quattro caratteri da
- * mostrare.
+ * la richiesta e di ritirare l'esito, e non vede mai altro.
  */
 
 import { api } from './shared/browser.js'
@@ -50,22 +43,19 @@ function show(step) {
 async function begin() {
   show('waiting')
   $('error').hidden = true
-  $('code').textContent = '····'
 
   let pairing
   try {
     pairing = await send('PAIR_START', { label: describeBrowser() })
   } catch (error) {
     // L'errore resta su questa schermata invece di rimbalzare altrove: chi
-    // legge sta aspettando un codice, e spostarlo su una pagina diversa gli
-    // farebbe perdere il filo di cosa stava facendo.
-    $('code').textContent = '—'
+    // legge sta aspettando, e spostarlo su una pagina diversa gli farebbe
+    // perdere il filo di cosa stava facendo.
     $('error').textContent = error.message
     $('error').hidden = false
     return
   }
 
-  $('code').textContent = pairing.confirmationCode
   connectUrl = pairing.connectUrl
   deadline = Date.now() + pairing.expiresIn * 1000
 
