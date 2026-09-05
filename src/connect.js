@@ -147,6 +147,14 @@ $('retry').addEventListener('click', () => {
   begin()
 })
 $('reopen').addEventListener('click', openConsentTab)
+
+// Via d'uscita per chi si autocolloca: senza, la pagina parte da sola verso
+// il server predefinito e non c'è modo di cambiarlo.
+$('change-server').addEventListener('click', () => {
+  clearTimeout(pollTimer)
+  send('PAIR_CANCEL').catch(() => {})
+  show('server')
+})
 $('close').addEventListener('click', () => window.close())
 
 init()

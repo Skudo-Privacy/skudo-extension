@@ -99,3 +99,23 @@ body.connect {
   border-radius: 50%;
   background: var(--signal);
 }
+
+/*
+ * Il passo del server viene saltato quando l'indirizzo è già noto, che è
+ * sempre tranne la prima volta di chi si autocolloca. Senza questa via
+ * d'uscita non ci sarebbe modo di cambiarlo: la pagina parte da sola e resta
+ * in attesa.
+ */
+.linkish {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-dim);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkish:hover {
+  color: var(--ink);
+}
