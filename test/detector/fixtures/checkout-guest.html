@@ -1,0 +1,16 @@
+<!-- Cassa di un negozio: email di contatto più iscrizione alla newsletter.
+     Un alias qui ha molto senso. Il campo del codice sconto non va toccato. -->
+<form class="checkout__contact">
+  <h2>Contact</h2>
+  <input type="email" name="checkout[email]" placeholder="Email" autocomplete="shipping email">
+  <label><input type="checkbox" name="checkout[buyer_accepts_marketing]"> Email me with news and offers</label>
+  <h2>Shipping address</h2>
+  <input type="text" name="checkout[shipping_address][first_name]" placeholder="First name" autocomplete="given-name">
+  <input type="text" name="checkout[shipping_address][address1]" placeholder="Address" autocomplete="address-line1">
+  <input type="tel" name="checkout[shipping_address][phone]" placeholder="Phone" autocomplete="tel">
+  <div class="discount">
+    <input type="text" name="checkout[reduction_code]" placeholder="Discount code">
+    <button type="submit">Apply</button>
+  </div>
+  <button type="submit" class="step__footer__continue-btn">Continue to shipping</button>
+</form>

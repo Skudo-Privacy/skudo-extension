@@ -1,0 +1,36 @@
+{
+  "login-username-or-email.html": {
+    "why": "Il campo accetta nome utente o email. Va riconosciuto, ma su un accesso si riusa un alias esistente, non se ne crea uno nuovo.",
+    "fields": [{ "selector": "#login_field", "action": "reuse", "intent": "login" }]
+  },
+  "checkout-guest.html": {
+    "why": "Cassa senza account: alias utile. Il codice sconto e il telefono non vanno toccati.",
+    "fields": [{ "selector": "input[name='checkout[email]']", "action": "create" }]
+  },
+  "spa-signup-no-form.html": {
+    "why": "Nessun <form> e nessuna <label>: solo aria-label e data-testid. Il caso che i selettori statici sbagliano.",
+    "fields": [{ "selector": "[data-testid=signup-email]", "action": "create", "intent": "signup" }]
+  },
+  "support-search-and-contact.html": {
+    "why": "Tre trappole in una pagina: ricerca per email, campo oggetto, honeypot fuori schermo.",
+    "geometry": { "input[name=email_confirm_hp]": { "left": -9999, "right": -9779 } },
+    "fields": [{ "selector": "#from", "action": "create" }]
+  },
+  "newsletter-footer.html": {
+    "why": "Solo placeholder, e una frase di rassicurazione vicina che non deve confondere.",
+    "fields": [{ "selector": "input[name=EMAIL]", "action": "create", "intent": "signup" }]
+  },
+  "signup-confirm-pair.html": {
+    "why": "La seconda casella si ripete, non si rigenera.",
+    "fields": [
+      { "selector": "#reg_email", "action": "create", "intent": "signup" },
+      { "selector": "#reg_email2", "action": "repeat" }
+    ]
+  },
+  "shadow-widget-signup.html": {
+    "why": "Il modulo vive in una shadow root aperta.",
+    "shadowHost": "#waitlist-host",
+    "shadowTemplate": "#waitlist-template",
+    "fields": [{ "selector": "#wl", "action": "create", "intent": "signup" }]
+  }
+}

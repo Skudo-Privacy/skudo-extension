@@ -1,0 +1,13 @@
+<!-- Iscrizione con conferma dell'indirizzo: il secondo campo va ripetuto,
+     non generato di nuovo. -->
+<form id="registration-form" action="/account/create">
+  <fieldset>
+    <label for="reg_email">E-mail address</label>
+    <input type="email" id="reg_email" name="customer[email]">
+    <label for="reg_email2">Confirm e-mail address</label>
+    <input type="email" id="reg_email2" name="customer[email_confirmation]">
+    <label for="reg_pw">Choose a password</label>
+    <input type="password" id="reg_pw" name="customer[password]" autocomplete="new-password">
+  </fieldset>
+  <button type="submit">Register</button>
+</form>

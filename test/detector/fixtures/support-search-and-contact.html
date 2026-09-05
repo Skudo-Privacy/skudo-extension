@@ -1,0 +1,19 @@
+<!-- Pagina di assistenza: una ricerca che filtra per email, un modulo di
+     contatto con oggetto, e un campo trappola. Tre modi diversi di sbagliare. -->
+<header>
+  <form role="search" action="/search">
+    <input type="text" name="q" placeholder="Search by email or ticket number">
+    <button>Search</button>
+  </form>
+</header>
+<main>
+  <form action="/tickets" method="post">
+    <label for="from">Your email</label>
+    <input type="email" id="from" name="email">
+    <label for="subj">Subject</label>
+    <input type="text" id="subj" name="subject" placeholder="Subject">
+    <textarea name="body"></textarea>
+    <input type="text" name="email_confirm_hp" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px">
+    <button type="submit">Send message</button>
+  </form>
+</main>

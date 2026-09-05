@@ -1,0 +1,10 @@
+<!-- Il modulo vero vive dentro un web component. Senza attraversare le shadow
+     root, l'estensione non vede niente e sembra rotta. -->
+<div id="waitlist-host"></div>
+<template id="waitlist-template">
+  <form>
+    <label for="wl">Email address</label>
+    <input type="text" id="wl" name="wl_email">
+    <button type="submit">Join the waitlist</button>
+  </form>
+</template>

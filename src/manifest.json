@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "Skudo",
+  "short_name": "Skudo",
+  "description": "Create an email alias instead of giving out your real address.",
+  "version": "0.1.0",
+  "homepage_url": "https://skudo.org",
+
+  "icons": {
+    "16": "img/icon_16.png",
+    "32": "img/icon_32.png",
+    "48": "img/icon_48.png",
+    "128": "img/icon_128.png"
+  },
+
+  "action": {
+    "default_title": "Skudo",
+    "default_popup": "popup.html"
+  },
+
+  "background": {
+    "scripts": ["background.js"],
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "permissions": ["storage", "scripting", "activeTab", "contextMenus"],
+
+  "optional_host_permissions": ["<all_urls>"],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+
+  "commands": {
+    "create_alias": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Create an alias and copy it"
+    }
+  },
+
+  "sidebar_action": {
+    "default_title": "Skudo",
+    "default_panel": "popup.html",
+    "default_icon": {
+      "16": "img/icon_16.png",
+      "32": "img/icon_32.png",
+      "48": "img/icon_48.png",
+      "128": "img/icon_128.png"
+    }
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "extension@skudo.org",
+      "strict_min_version": "115.0"
+    }
+  }
+}

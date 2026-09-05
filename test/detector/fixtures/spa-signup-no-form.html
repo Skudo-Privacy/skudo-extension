@@ -1,0 +1,16 @@
+<!-- Iscrizione di un'applicazione a componenti: nessun <form>, nessuna <label>,
+     solo aria-label. Il caso che le estensioni basate su selettori sbagliano. -->
+<div class="AuthCard">
+  <div class="AuthCard__header">Create your account</div>
+  <div class="Field">
+    <input class="Field__input" type="text" aria-label="Email" data-testid="signup-email" autocomplete="off">
+  </div>
+  <div class="Field">
+    <input class="Field__input" type="password" aria-label="Password" data-testid="signup-password">
+  </div>
+  <div class="Field">
+    <label><input type="checkbox" data-testid="tos"> I agree to the Terms of Service and Privacy Policy</label>
+  </div>
+  <button class="Button Button--primary" data-testid="signup-submit">Sign up</button>
+  <div class="AuthCard__footer">Already have an account? <a href="/login">Log in</a></div>
+</div>
