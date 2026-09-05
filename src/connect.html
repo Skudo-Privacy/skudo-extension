@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Connect Skudo</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="connect.css" />
+  </head>
+  <body class="connect">
+    <main class="sheet">
+      <header class="sheet__head">
+        <img src="img/icon_48.png" width="30" height="30" alt="" />
+        <span>Skudo</span>
+      </header>
+
+      <!-- Server, solo per chi si autocolloca -->
+      <section id="step-server" class="step" hidden>
+        <h1>Connect this browser</h1>
+        <p class="lede">One click, no keys to copy.</p>
+        <label class="field">
+          <span class="field__label">Server</span>
+          <input type="url" id="instance" spellcheck="false" autocomplete="off" />
+        </label>
+        <button type="button" id="begin" class="button button--primary">Continue</button>
+        <p class="error" id="server-error" hidden></p>
+      </section>
+
+      <!-- Codice + attesa -->
+      <section id="step-waiting" class="step" hidden>
+        <h1>Check this code</h1>
+        <p class="lede">
+          A Skudo tab has opened. Make sure it shows the same four characters,
+          then press Connect there.
+        </p>
+
+        <div class="code" id="code" aria-live="polite"></div>
+
+        <p class="waiting">
+          <span class="spinner spinner--dark"></span>
+          <span>Waiting for you to approve</span>
+        </p>
+
+        <button type="button" id="reopen" class="button button--quiet">Reopen the Skudo tab</button>
+        <p class="note">
+          If the codes do not match, press Cancel there and close this page:
+          the request did not come from this browser.
+        </p>
+      </section>
+
+      <!-- Fatto -->
+      <section id="step-done" class="step" hidden>
+        <div class="tick" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1C2400" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m5 12.5 4.5 4.5L19 7.5" />
+          </svg>
+        </div>
+        <h1>Connected</h1>
+        <p class="lede" id="done-body">You can close this tab.</p>
+        <button type="button" id="close" class="button button--primary">Close</button>
+      </section>
+
+      <!-- Scaduto -->
+      <section id="step-expired" class="step" hidden>
+        <h1>The request expired</h1>
+        <p class="lede">Requests last two minutes, so a stale one cannot be approved by mistake.</p>
+        <button type="button" id="retry" class="button button--primary">Try again</button>
+      </section>
+    </main>
+
+    <script src="connect.js"></script>
+  </body>
+</html>

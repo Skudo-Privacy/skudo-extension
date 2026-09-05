@@ -294,6 +294,18 @@ $('settings-toggle').addEventListener('click', () => {
   show(settingsOpen ? (state?.signedIn ? 'main' : 'signin') : 'settings')
 })
 
+/**
+ * Il collegamento si svolge in una pagina dell'estensione, non qui.
+ *
+ * Il popup si chiude appena l'utente guarda un'altra scheda, e il flusso
+ * richiede proprio quello: leggere un codice qui e confrontarlo là. Vedi
+ * src/connect.js.
+ */
+$('connect').addEventListener('click', async () => {
+  await api.tabs.create({ url: api.runtime.getURL('connect.html') })
+  window.close()
+})
+
 $('signin').addEventListener('click', async () => {
   const button = $('signin')
   showError('signin-error', '')

@@ -55,6 +55,15 @@ describe('invarianti di sicurezza', () => {
     expect(content).not.toMatch(/\bfetch\s*\(/)
   })
 
+  it('il segreto del collegamento non passa dalla pagina che guida il flusso', () => {
+    // connect.html mostra quattro caratteri e aspetta. Il segreto che ritira
+    // il token resta nel contesto di sfondo: se non passa di qui, non può
+    // finire in una schermata, in un registro o nella cronologia.
+    const connect = withoutComments(readFileSync(join(src, 'connect.js'), 'utf8'))
+    expect(connect).not.toMatch(/secret/i)
+    expect(connect).not.toMatch(/\bfetch\s*\(/)
+  })
+
   it("non chiede accesso ai siti al momento dell'installazione", () => {
     expect(manifest.host_permissions).toBeUndefined()
     expect(manifest.optional_host_permissions).toEqual(['<all_urls>'])
@@ -132,6 +141,8 @@ describe('file dichiarati', () => {
       'popup.js',
       'popup.html',
       'popup.css',
+      'connect.html',
+      'connect.css',
       ...readdirSync(join(src, 'assets', 'img')).map((name) => `img/${name}`),
     ])
     for (const file of new Set(declared)) {

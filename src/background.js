@@ -9,6 +9,7 @@
 
 import { SkudoApi, aliasEmail } from './shared/api.js'
 import { api } from './shared/browser.js'
+import { forgetSecret, rememberSecret, readSecret } from './shared/pairing.js'
 import { clearToken, getSettings, getToken, setSettings, setToken } from './shared/storage.js'
 
 const CONTEXT_MENU_ID = 'skudo-create-alias'
@@ -100,6 +101,75 @@ const handlers = {
      chiave che il sito dovrebbe già possedere, e gli altri richiedono un id di
      alias che non ha modo di conoscere. */
 
+  /**
+   * Apre una richiesta di collegamento.
+   *
+   * Il segreto resta nel contesto di sfondo: alla pagina che guida il flusso
+   * tornano solo i quattro caratteri da mostrare e l'indirizzo da aprire.
+   * Anche se quella pagina è nostra, un segreto che non le passa non può
+   * finire in un registro, in uno screenshot o nella cronologia.
+   */
+  async PAIR_START({ instance, label }) {
+    const base = String(instance || '').replace(/\/+$/, '')
+    const response = await fetch(`${base}/api/v1/extension/pair`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+      credentials: 'omit',
+    })
+
+    if (!response.ok) throw new Error('Could not reach that Skudo server.')
+
+    const data = await response.json()
+    await rememberSecret(api, data.secret)
+    // L'indirizzo del server si salva adesso: da qui in poi tutte le chiamate
+    // vanno lì, e chi si autocolloca deve poterlo cambiare una volta sola.
+    await setSettings({ instance: base })
+
+    return {
+      confirmationCode: data.confirmation_code,
+      connectUrl: data.connect_url,
+      interval: data.interval,
+      expiresIn: data.expires_in,
+    }
+  },
+
+  /**
+   * Chiede se nel frattempo qualcuno ha approvato, e in caso ritira il token.
+   */
+  async PAIR_CLAIM() {
+    const secret = await readSecret(api)
+    if (!secret) return { status: 'expired' }
+
+    const { instance } = await getSettings()
+    const response = await fetch(`${instance}/api/v1/extension/pair/claim`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret }),
+      credentials: 'omit',
+    })
+
+    if (response.status === 202) return { status: 'pending' }
+
+    if (!response.ok) {
+      // 410 scaduta, 404 sconosciuta: in entrambi i casi non c'è niente da
+      // aspettare, e il segreto non serve più a nessuno.
+      await forgetSecret(api)
+      return { status: 'expired' }
+    }
+
+    const data = await response.json()
+    await setToken(data.token)
+    await forgetSecret(api)
+
+    return { status: 'connected', username: data.username }
+  },
+
+  async PAIR_CANCEL() {
+    await forgetSecret(api)
+    return { cancelled: true }
+  },
+
   async SIGN_IN({ instance, token }) {
     const skudo = new SkudoApi({ instance, token })
     // Si verifica prima di salvare: una chiave sbagliata deve dare un errore
@@ -112,6 +182,7 @@ const handlers = {
 
   async SIGN_OUT() {
     await clearToken()
+    await forgetSecret(api)
     // Con l'accesso va via anche l'icona nelle pagine: lasciarla attiva
     // significherebbe continuare a leggere ogni pagina per un'estensione che
     // non può più fare niente.

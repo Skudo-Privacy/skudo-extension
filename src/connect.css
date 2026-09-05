@@ -1,0 +1,101 @@
+/*
+ * Pagina di collegamento.
+ *
+ * È una pagina dell'estensione aperta in una scheda, non il popup, e la
+ * ragione è di sicurezza prima che di grafica: il codice di conferma va
+ * confrontato con quello mostrato su un'altra scheda, e un popup si chiude nel
+ * momento esatto in cui si guarda altrove. Vedi src/shared/pairing.js.
+ */
+
+body.connect {
+  width: auto;
+  min-height: 100vh;
+  padding: 48px 20px;
+  display: flex;
+  justify-content: center;
+  background: var(--bg-sunken);
+}
+
+.sheet {
+  width: 100%;
+  max-width: 400px;
+  align-self: flex-start;
+  padding: 28px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 22px;
+  font-weight: 600;
+}
+
+.step h1 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.step .lede {
+  margin: 0 0 20px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+
+/*
+ * Il codice è la parte che l'utente deve davvero leggere e confrontare, non un
+ * ornamento: grande, a spaziatura fissa, distanziato. `text-indent` compensa lo
+ * spazio che `letter-spacing` aggiunge dopo l'ultimo carattere, altrimenti il
+ * blocco appare spostato a sinistra.
+ */
+.code {
+  padding: 22px 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-indent: 0.25em;
+  text-align: center;
+}
+
+.waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 18px 0;
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+.spinner--dark {
+  border-color: color-mix(in srgb, var(--ink) 15%, transparent);
+  border-top-color: var(--brand);
+}
+
+.note {
+  margin: 14px 0 0;
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: var(--signal);
+}

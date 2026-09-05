@@ -41,12 +41,15 @@ const bundles = [
   { in: join(src, 'background.js'), out: join(out, 'background.js') },
   { in: join(src, 'content.js'), out: join(out, 'content.js') },
   { in: join(src, 'popup.js'), out: join(out, 'popup.js') },
+  { in: join(src, 'connect.js'), out: join(out, 'connect.js') },
 ]
 
 async function copyStatic() {
   await cp(join(src, 'manifest.json'), join(out, 'manifest.json'))
   await cp(join(src, 'popup.html'), join(out, 'popup.html'))
   await cp(join(src, 'popup.css'), join(out, 'popup.css'))
+  await cp(join(src, 'connect.html'), join(out, 'connect.html'))
+  await cp(join(src, 'connect.css'), join(out, 'connect.css'))
   await cp(join(src, 'assets', 'img'), join(out, 'img'), { recursive: true })
   // Gli avvisi di copyright viaggiano nel pacchetto, come richiesto dalle
   // licenze del lavoro derivato. Vedi NOTICE.md.
