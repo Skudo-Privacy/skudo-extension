@@ -5,6 +5,7 @@
  * posto in cui il token esiste. Il popup non lo riceve nemmeno per mostrarlo.
  */
 
+import { addressNode } from './shared/address.js'
 import { api } from './shared/browser.js'
 
 /**
@@ -86,7 +87,11 @@ function showError(id, message) {
 
 function openDraft(alias) {
   draft = alias
-  $('draft-email').textContent = alias.email
+  // L'indirizzo con la parte locale in evidenza e il dominio smorzato: vedi
+  // src/shared/address.js per il perche'.
+  const slot = $('draft-email')
+  slot.textContent = ''
+  slot.appendChild(addressNode(alias.email, 'address__inner'))
   $('draft-description').value = alias.description || ''
   $('draft').hidden = false
   $('draft-description').focus()
@@ -149,7 +154,7 @@ async function create() {
     if (error.code === 'UNAUTHENTICATED') show('signin')
   } finally {
     button.disabled = false
-    label.textContent = site ? 'Create alias' : 'Create an alias to copy'
+    label.textContent = 'Create an alias'
     spinner.hidden = true
   }
 }
@@ -224,15 +229,25 @@ function aliasRow(alias, { onChanged }) {
   dot.setAttribute('aria-hidden', 'true')
   top.appendChild(dot)
 
-  const code = document.createElement('code')
-  code.textContent = alias.email
-  top.appendChild(code)
+  top.appendChild(addressNode(alias.email))
 
-  top.appendChild(
+  /*
+   * Le azioni stanno sopra la riga, non dentro di essa.
+   *
+   * Erano nel flusso, e tre bottoni da trenta pixel si prendevano un terzo
+   * della larghezza anche quando erano invisibili: `opacity: 0` nasconde, non
+   * toglie spazio. L'effetto era che un indirizzo lungo si spezzava a meta'
+   * della parte locale, cioe' esattamente del pezzo che lo identifica, per
+   * fare posto a bottoni che nessuno stava guardando.
+   */
+  const tools = document.createElement('div')
+  tools.className = 'row-alias__actions'
+
+  tools.appendChild(
     iconButton(`Copy ${alias.email}`, copyIcon(), () => navigator.clipboard.writeText(alias.email))
   )
 
-  top.appendChild(
+  tools.appendChild(
     iconButton(alias.active ? 'Turn off' : 'Turn on', powerIcon(), async () => {
       try {
         await send('SET_ALIAS_ACTIVE', { id: alias.id, active: !alias.active })
@@ -245,9 +260,10 @@ function aliasRow(alias, { onChanged }) {
     })
   )
 
-  top.appendChild(iconButton('Delete', trashIcon(), () => askToDelete()))
+  tools.appendChild(iconButton('Delete', trashIcon(), () => askToDelete()))
 
   item.appendChild(top)
+  item.appendChild(tools)
 
   /* Nota: testo finché non lo si clicca, campo mentre lo si scrive. */
   const note = document.createElement('button')
@@ -373,7 +389,7 @@ async function loadList() {
       heading.textContent = 'Already on this site'
       aliases = await send('ALIASES_FOR_SITE', { site })
     } else {
-      heading.textContent = 'Recent aliases'
+      heading.textContent = 'Recent'
       aliases = await send('RECENT_ALIASES')
     }
   } catch (error) {
@@ -492,9 +508,7 @@ async function init() {
   // scheda vuota. Il bottone resta, perché creare un alias da copiare a mano è
   // esattamente quello che si fa quando l'indirizzo va scritto altrove.
   $('site').textContent = site || 'Your aliases'
-  $('create').querySelector('.button__label').textContent = site
-    ? 'Create alias'
-    : 'Create an alias to copy'
+  $('create').querySelector('.button__label').textContent = 'Create an alias'
 
   show('main')
 

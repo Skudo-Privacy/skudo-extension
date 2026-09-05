@@ -130,7 +130,7 @@ describe('il popup', () => {
     await settle()
 
     expect(document.getElementById('site').textContent).toBe('Your aliases')
-    expect(document.getElementById('list-heading').textContent).toBe('Recent aliases')
+    expect(document.getElementById('list-heading').textContent).toBe('Recent')
 
     const rows = document.querySelectorAll('#alias-list li')
     expect(rows).toHaveLength(2)

@@ -276,7 +276,7 @@ function panelFor(entry) {
   if (openPanel && openPanel !== entry) closePanelFor(openPanel)
 
   if (!entry.panel) {
-    entry.panel = createPanel()
+    entry.panel = createPanel({ site: site() })
     document.body.appendChild(entry.panel.host)
     entry.panel.move(panelPosition(entry.input.getBoundingClientRect()))
     openPanel = entry

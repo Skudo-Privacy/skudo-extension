@@ -155,10 +155,29 @@ export function iconPosition(rect, shift) {
   }
 }
 
-/** Posizione del pannello: sotto il campo, allineato a sinistra con esso. */
+/** Larghezza del pannello. Deve stare in pari con `.panel` in content/ui.js. */
+export const PANEL_WIDTH = 360
+
+/** Quanto respiro lasciare fra il pannello e il bordo della finestra. */
+const VIEWPORT_MARGIN = 8
+
+/**
+ * Posizione del pannello: sotto il campo, allineato a sinistra con esso.
+ *
+ * Con un margine, pero'. Un campo vicino al bordo destro della finestra, che
+ * su un modulo stretto o su una finestra affiancata capita spesso, mandava il
+ * pannello meta' fuori dallo schermo: i bottoni finivano dove non si possono
+ * premere, e non c'era modo di accorgersene se non provandolo li'.
+ */
 export function panelPosition(rect) {
+  const room = document.documentElement.clientWidth
+  const left = Math.max(
+    VIEWPORT_MARGIN,
+    Math.min(rect.left, room - PANEL_WIDTH - VIEWPORT_MARGIN)
+  )
+
   return {
-    left: rect.left + window.scrollX,
-    top: rect.bottom + window.scrollY + 6,
+    left: left + window.scrollX,
+    top: rect.bottom + window.scrollY + 7,
   }
 }

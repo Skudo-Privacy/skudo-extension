@@ -1,253 +1,63 @@
 /**
  * L'icona e il pannello, dentro uno shadow DOM chiuso.
  *
- * ## Perché non basta uno stile in linea
+ * ## Perche' non basta uno stile in linea
  *
  * Questa roba viene disegnata dentro la pagina di qualcun altro, e la pagina di
  * qualcun altro ha il proprio foglio di stile e il proprio JavaScript. Uno
- * stile in linea regge finché il sito non ha una regola `!important` su
+ * stile in linea regge finche' il sito non ha una regola `!important` su
  * `img`, e il nostro markup resta comunque leggibile e modificabile dal
  * JavaScript della pagina.
  *
- * Uno shadow root **chiuso** chiude entrambe le porte: le regole del sito non
+ * Uno shadow root chiuso chiude entrambe le porte: le regole del sito non
  * attraversano il confine, e `element.shadowRoot` restituisce `null` a chi
- * prova a guardarci dentro dalla pagina. Il nome dell'elemento ospite è
+ * prova a guardarci dentro dalla pagina. Il nome dell'elemento ospite e'
  * `<skudo-anchor>`, un tag che nessun sito ha motivo di avere in un selettore.
  *
  * Dentro non entra mai niente che arrivi dalla pagina: gli unici testi che
  * mostriamo vengono dal nostro server o sono costanti, e si scrivono con
- * `textContent`. Nessun `innerHTML` con dati.
+ * `textContent`.
+ *
+ * ## Il disegno
+ *
+ * Una cosa sola e' rumorosa, l'indirizzo, perche' e' l'unica per cui il
+ * pannello esiste. Tutto il resto sta zitto.
+ *
+ * Nell'indirizzo la parte locale e' in inchiostro pieno e il dominio e'
+ * smorzato. Non e' decorazione: e' la risposta alla domanda che uno si fa
+ * guardando un elenco di alias, cioe' quale pezzo distingue questo dagli
+ * altri. Vale nel pannello e vale in ogni elenco, ed e' il motivo per cui
+ * `addressNode()` sta qui e non e' un `textContent` qualunque.
  */
 
-import { ICON_SIZE } from './anchor.js'
-
-const BRAND = '#0F5E56'
-const BRAND_STRONG = '#0B4741'
-const SIGNAL = '#C6EA33'
-
-/** Il marchio, disegnato invece che caricato: nessuna richiesta, nessuna CSP. */
-const MARK = `<svg viewBox="0 0 24 24" width="${ICON_SIZE}" height="${ICON_SIZE}" aria-hidden="true">
-<rect width="24" height="24" rx="5.4" fill="${BRAND}"/>
-<g fill="#fff">
-<rect x="7" y="6.8" width="11.7" height="2.4" rx="1.2"/>
-<circle cx="6" cy="9.9" r="1.2"/>
-<rect x="7" y="11.2" width="9.9" height="2.3" rx="1.15"/>
-<circle cx="18" cy="13.9" r="1.2"/>
-<rect x="4.9" y="14.8" width="12.1" height="2.3" rx="1.15"/>
-</g>
-</svg>`
-
-const STYLE = `
-:host { all: initial; }
-* { box-sizing: border-box; margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
-
-/*
- * L'icona non si mostra finché non sa dove stare.
- *
- * Prima compariva subito, alla posizione iniziale, e saltava di venti pixel un
- * fotogramma dopo, quando lo spostamento per scansare le altre estensioni
- * veniva calcolato. Un salto in una pagina che qualcun altro sta guardando si
- * legge come un difetto del sito, non come una nostra animazione. Adesso
- * appare già al posto giusto: prima si posiziona, poi si dissolve dentro.
- *
- * È la stessa disciplina che usa Proton Pass sulla propria icona, ed è una di
- * quelle cose che si notano solo quando mancano.
- */
-.icon {
-  width: ${ICON_SIZE}px; height: ${ICON_SIZE}px;
-  padding: 0; border: 0; background: none;
-  display: block; cursor: pointer;
-  border-radius: 6px;
-  opacity: 0;
-  transform: scale(.86);
-  /* Niente pointer-events qui: foreignShift() spegne quelli dell'ospite per
-     campionare cosa c'e' sotto, e un valore esplicito sul bottone lo
-     riaccenderebbe proprio mentre proviamo a nasconderci. */
-  transition: opacity 160ms cubic-bezier(.16,1,.3,1), transform 160ms cubic-bezier(.16,1,.3,1);
-}
-.icon[data-ready='true'] { opacity: .55; transform: scale(1); }
-.icon[data-ready='true']:hover,
-.icon[data-ready='true']:focus-visible { opacity: 1; transform: scale(1.08); outline: none; }
-.icon[data-busy='true'] { opacity: 1; animation: pulse 900ms ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
-
-.panel {
-  width: 288px;
-  border-radius: 16px;
-  background: #fff;
-  color: #000;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,.05),
-    0 1px 2px rgba(0,0,0,.05),
-    0 12px 34px -6px rgba(0,0,0,.22);
-  font-size: 13px; line-height: 1.45;
-  animation: rise 180ms cubic-bezier(.16,1,.3,1);
-  /* L'altezza è animata quando il contenuto cambia: vedi resize(). */
-  overflow: hidden;
-  transition: height 200ms cubic-bezier(.16,1,.3,1);
-}
-.panel__body { padding: 14px; }
-@keyframes rise { from { opacity: 0; transform: translateY(-6px) scale(.985) } }
-
-/*
- * Una riga di intestazione con il marchio.
- *
- * Un riquadro che compare da solo sopra un campo, senza dire da chi viene, è
- * indistinguibile da quello che farebbe una pagina malintenzionata. Il marchio
- * non è decorazione: è la risposta alla domanda "chi mi sta parlando".
- */
-.brandline {
-  display: flex; align-items: center; gap: 6px;
-  margin-bottom: 9px;
-  font-size: 11px; font-weight: 700;
-  letter-spacing: .04em; text-transform: uppercase;
-  color: #8a8a90;
-}
-.brandline svg { width: 14px; height: 14px; display: block; }
-
-.title { font-weight: 620; font-size: 13.5px; margin-bottom: 3px; letter-spacing: -.005em; }
-.sub { color: #6b6b70; font-size: 12px; }
-
-/*
- * L'indirizzo. È la cosa per cui il pannello esiste, quindi ha il suo spazio e
- * un fondo che lo stacca: chi guarda deve trovarlo senza cercarlo, e deve
- * poterlo leggere carattere per carattere, perché un alias si sbaglia a
- * trascrivere.
- */
-.alias {
-  display: flex; align-items: center; gap: 8px;
-  margin: 11px 0 13px; padding: 10px 11px;
-  border-radius: 11px;
-  background: #f5f5f7;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px; font-weight: 600;
-  letter-spacing: -.01em;
-  overflow-wrap: anywhere;
-}
-
-.row { display: flex; gap: 8px; }
-
-button.act {
-  flex: 1; min-height: 36px;
-  border: 0; border-radius: 11px;
-  font: inherit; font-weight: 650; font-size: 12.5px;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
-}
-button.act:active { transform: scale(.98); }
-button.primary { background: ${BRAND}; color: #fff; }
-button.primary:hover { background: ${BRAND_STRONG}; }
-button.quiet { background: none; box-shadow: inset 0 0 0 1px #dcdce0; color: #000; }
-button.quiet:hover { background: #f2f2f4; }
-button.act:focus-visible { outline: 2px solid ${BRAND}; outline-offset: 2px; }
-
-ul { list-style: none; padding: 0; margin: 9px 0 0; max-height: 172px; overflow-y: auto; }
-li + li { margin-top: 5px; }
-li button {
-  width: 100%; text-align: left;
-  padding: 9px 11px; border: 0; border-radius: 10px;
-  background: #f5f5f7; cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px; color: #000;
-  overflow-wrap: anywhere;
-  transition: background-color 120ms ease;
-}
-li button:hover { background: #ebebef; }
-li button:focus-visible { outline: 2px solid ${BRAND}; outline-offset: 1px; }
-
-.spinner {
-  width: 14px; height: 14px; flex: none;
-  border: 2px solid rgba(0,0,0,.12); border-top-color: ${BRAND};
-  border-radius: 50%; animation: spin .7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg) } }
-.working { display: flex; align-items: center; gap: 9px; color: #6b6b70; }
-
-.bad { color: #c22} 
-.tick { color: ${BRAND}; font-weight: 700; }
-
-/*
- * Il tema scuro, scritto due volte di proposito.
- *
- * Non e' pignoleria: su Mullvad Browser e LibreWolf resistFingerprinting e'
- * acceso per difetto e fa rispondere "light" alla media query per tutti,
- * sempre. Chi usa il tema scuro si ritroverebbe un riquadro bianco in faccia
- * sopra una pagina nera, senza poterci fare niente. Quindi la scelta esplicita
- * dell'utente vince, e la media query serve solo quando una scelta non c'e'.
- * Stessa disciplina di popup.css.
- *
- * I selettori sono piatti e non annidati: la nidificazione CSS e' arrivata in
- * Firefox 117, e la base ESR di Mullvad e LibreWolf e' la 115. Annidare qui
- * vorrebbe dire spegnere il tema scuro proprio sui due browser per cui questa
- * regola esiste, e senza nessun errore da nessuna parte.
- */
-@media (prefers-color-scheme: dark) {
-  :host(:not([data-skudo-theme='light'])) .panel {
-    background: #1d2022; color: #f5f5f3;
-    box-shadow:
-      0 0 0 1px rgba(255,255,255,.07),
-      0 1px 2px rgba(0,0,0,.5),
-      0 14px 38px -8px rgba(0,0,0,.7);
-  }
-  :host(:not([data-skudo-theme='light'])) .sub, :host(:not([data-skudo-theme='light'])) .working, :host(:not([data-skudo-theme='light'])) .brandline { color: #9a9aa0; }
-  .alias, li button { background: #2a2e31; color: #f5f5f3; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
-  li button:hover { background: #33383b; }
-  button.quiet { box-shadow: inset 0 0 0 1px #3a3f43; color: #f5f5f3; }
-  button.quiet:hover { background: #26292c; }
-  button.primary { background: #157468; }
-  button.primary:hover { background: #1a8a7c; }
-  .spinner { border-color: rgba(255,255,255,.16); }
-}
-
-:host([data-skudo-theme='dark']) .panel {
-  background: #1d2022; color: #f5f5f3;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,.07),
-    0 1px 2px rgba(0,0,0,.5),
-    0 14px 38px -8px rgba(0,0,0,.7);
-}
-:host([data-skudo-theme='dark']) .sub, :host([data-skudo-theme='dark']) .working, :host([data-skudo-theme='dark']) .brandline { color: #9a9aa0; }
-.alias, li button { background: #2a2e31; color: #f5f5f3; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
-li button:hover { background: #33383b; }
-button.quiet { box-shadow: inset 0 0 0 1px #3a3f43; color: #f5f5f3; }
-button.quiet:hover { background: #26292c; }
-button.primary { background: #157468; }
-button.primary:hover { background: #1a8a7c; }
-.spinner { border-color: rgba(255,255,255,.16); }
-
-@media (prefers-reduced-motion: reduce) {
-  * { animation-duration: .01ms !important; transition-duration: .01ms !important }
-}
-`
+import { addressNode } from '../shared/address.js'
+import { TOKENS, TOKENS_DARK } from '../shared/tokens.js'
+import { ICON_SIZE, PANEL_WIDTH } from './anchor.js'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 /**
- * Il marchio come nodi, non come stringa.
- *
- * Il bottone dell'icona usa `innerHTML` con una costante, ed è l'unica volta
- * in tutto il pacchetto. Qui serve una seconda copia, dentro il pannello, e
- * una seconda `innerHTML` sarebbe la prima cosa che un revisore degli store va
- * a cercare. Costruirlo a mano costa dieci righe e toglie la domanda.
+ * Il marchio, disegnato invece che caricato: nessuna richiesta, nessuna CSP,
+ * e nessun file da tenere allineato con quello degli store.
  */
-function markNode(size = 14) {
+function markNode(size = 16, plate = true) {
   const svg = document.createElementNS(SVG_NS, 'svg')
   svg.setAttribute('viewBox', '0 0 24 24')
   svg.setAttribute('width', String(size))
   svg.setAttribute('height', String(size))
   svg.setAttribute('aria-hidden', 'true')
 
-  const plate = document.createElementNS(SVG_NS, 'rect')
-  plate.setAttribute('width', '24')
-  plate.setAttribute('height', '24')
-  plate.setAttribute('rx', '5.4')
-  plate.setAttribute('fill', BRAND)
-  svg.appendChild(plate)
+  if (plate) {
+    const bg = document.createElementNS(SVG_NS, 'rect')
+    bg.setAttribute('width', '24')
+    bg.setAttribute('height', '24')
+    bg.setAttribute('rx', '5.4')
+    bg.setAttribute('fill', 'var(--brand)')
+    svg.appendChild(bg)
+  }
 
   const group = document.createElementNS(SVG_NS, 'g')
-  group.setAttribute('fill', '#fff')
+  group.setAttribute('fill', plate ? '#fff' : 'currentColor')
   for (const [x, y, w, h] of [
     [7, 6.8, 11.7, 2.4],
     [7, 11.2, 9.9, 2.3],
@@ -272,21 +82,325 @@ function markNode(size = 14) {
     group.appendChild(dot)
   }
   svg.appendChild(group)
-
   return svg
 }
 
-/**
- * Crea un ospite isolato, posizionato in assoluto sul documento.
+/** Un'icona di tratto, costruita a nodi. */
+function strokeIcon(paths, size = 15) {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('width', String(size))
+  svg.setAttribute('height', String(size))
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.9')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const d of paths) {
+    const path = document.createElementNS(SVG_NS, 'path')
+    path.setAttribute('d', d)
+    svg.appendChild(path)
+  }
+  return svg
+}
+
+const COPY_PATHS = ['M9.5 9.5h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 8 20v-9a1.5 1.5 0 0 1 1.5-1.5Z', 'M5.5 15.5H5A1.5 1.5 0 0 1 3.5 14V5A1.5 1.5 0 0 1 5 3.5h9A1.5 1.5 0 0 1 15.5 5v.5']
+const TICK_PATHS = ['m5 12.6 4.6 4.6L19.2 7.6']
+
+const STYLE = `
+:host { all: initial; }
+
+.scope {
+${TOKENS}
+  color: var(--ink);
+  font-family: var(--ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+/* ------------------------------------------------------------------ *
+ * L'icona nel campo
+ * ------------------------------------------------------------------ */
+
+/*
+ * Non si mostra finche' non sa dove stare.
  *
- * @returns {{host: HTMLElement, root: ShadowRoot}}
+ * Prima compariva subito, alla posizione iniziale, e saltava di venti pixel un
+ * fotogramma dopo, quando lo spostamento per scansare le altre estensioni
+ * veniva calcolato. Un salto dentro la pagina di qualcun altro si legge come un
+ * difetto del sito, non come una nostra animazione.
  */
+.icon {
+  width: ${ICON_SIZE}px; height: ${ICON_SIZE}px;
+  padding: 0; border: 0; background: none;
+  display: block; cursor: pointer;
+  border-radius: 6px;
+  opacity: 0;
+  transform: scale(.82);
+  transition: opacity 170ms var(--ease), transform 170ms var(--ease);
+}
+.icon[data-ready='true'] { opacity: .5; transform: scale(1); }
+.icon[data-ready='true']:hover,
+.icon[data-ready='true']:focus-visible { opacity: 1; transform: scale(1.1); outline: none; }
+.icon[data-busy='true'] { opacity: 1; animation: breathe 1.1s ease-in-out infinite; }
+@keyframes breathe { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
+
+/* ------------------------------------------------------------------ *
+ * Il pannello
+ * ------------------------------------------------------------------ */
+
+.panel {
+  width: ${PANEL_WIDTH}px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  animation: rise 200ms var(--ease);
+  transition: height var(--slow) var(--ease);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(-7px) scale(.982) } }
+
+/*
+ * Il filo in cima.
+ *
+ * Verde per quasi tutta la larghezza, lime nell'ultimo tratto. E' il segno di
+ * un annullo postale, ed e' l'unico posto in cui il colore forte compare senza
+ * che sia successo niente: dice di chi e' questa superficie, e lo dice in tre
+ * pixel invece che con un logo grande.
+ */
+.panel::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand) 0 72%, var(--signal) 72% 100%);
+}
+
+.head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 16px 0;
+}
+.head__mark { display: block; flex: none; }
+.head__name {
+  font-size: 12.5px; font-weight: 640; letter-spacing: -.006em;
+}
+.head__site {
+  margin-left: auto;
+  font-size: 11.5px; color: var(--muted);
+  max-width: 165px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.body { padding: 11px 16px 16px; }
+
+.title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15.5px; font-weight: 640; letter-spacing: -.013em; line-height: 1.25;
+}
+
+/*
+ * Il bollo.
+ *
+ * Compare una volta, quando un alias e' appena stato creato, e non compare
+ * altrove. E' il momento in cui e' fatto: un prodotto che festeggia ogni
+ * schermata non festeggia niente.
+ */
+.stamp {
+  flex: none;
+  width: 19px; height: 19px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--signal);
+  color: #16210A;
+  animation: stampIn 340ms var(--ease) both;
+}
+@keyframes stampIn {
+  from { transform: scale(.4) rotate(-14deg); opacity: 0 }
+  to { transform: none; opacity: 1 }
+}
+.note {
+  margin-top: 5px;
+  font-size: 12.5px; line-height: 1.5; color: var(--muted);
+  max-width: 46ch;
+}
+.note.bad { color: var(--alarm); }
+
+/* ------------------------------------------------------------------ *
+ * L'indirizzo: l'unica cosa rumorosa
+ * ------------------------------------------------------------------ */
+
+.address {
+  display: flex; align-items: center; gap: 10px;
+  margin: 13px 0 14px;
+  padding: 13px 12px 13px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--label);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  position: relative;
+  overflow: hidden;
+}
+.address__text {
+  flex: 1; min-width: 0;
+  font-family: var(--mono);
+  font-size: 14px; line-height: 1.35; letter-spacing: .002em;
+  overflow-wrap: anywhere;
+}
+.address__local { font-weight: 620; color: var(--ink); }
+/*
+ * Il dominio non si spezza al suo interno.
+ *
+ * Con overflow-wrap: anywhere sul contenitore, un indirizzo lungo veniva
+ * tagliato a metá della parte locale, cioe' esattamente del pezzo che
+ * identifica l'alias: "considerable.thunderstor / m7qz@sidegate.org". Tenendo
+ * il dominio indivisibile, l'interruzione cade fra le due parti, che e' il
+ * punto in cui un indirizzo si legge comunque spezzato.
+ */
+.address__domain { color: var(--muted); white-space: nowrap; }
+
+/*
+ * La linea tratteggiata prima del bottone che copia.
+ *
+ * E' la strappatura di un talloncino, ed e' l'altra meta' del segno in cima al
+ * pannello: due indizi dello stesso mestiere, la posta, invece di uno solo.
+ * Dice anche una cosa vera, che quella parte si stacca e se ne va altrove.
+ */
+.copy {
+  flex: none;
+  margin-left: 2px; padding-left: 11px;
+  border-left: 1px dashed var(--hairline-strong);
+  border-radius: 0;
+  width: 41px; height: 30px;
+  display: grid; place-items: center;
+  border: 0; border-radius: var(--radius-xs);
+  background: none; color: var(--muted);
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.copy:hover { color: var(--ink); }
+.copy > svg { transition: transform var(--fast) var(--ease); }
+.copy:hover > svg { transform: scale(1.12); }
+.copy:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.copy[data-done='true'] { color: var(--brand); }
+
+/*
+ * Il momento in cui e' fatto.
+ *
+ * Una passata sola, sul blocco dell'indirizzo, quando l'alias arriva o viene
+ * copiato. E' l'unica animazione non richiesta da un clic in tutto il
+ * pannello, ed e' l'unico uso del lime: un colore forte che compare in
+ * continuazione smette di voler dire qualcosa.
+ */
+.address[data-flash='true']::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, ${'rgba(198, 234, 51, .34)'}, transparent);
+  animation: sweep 620ms var(--ease);
+  pointer-events: none;
+}
+@keyframes sweep { from { transform: translateX(-100%) } to { transform: translateX(100%) } }
+
+/* ------------------------------------------------------------------ *
+ * Azioni
+ * ------------------------------------------------------------------ */
+
+.row { display: flex; gap: 9px; }
+
+button.act {
+  flex: 1; min-height: 40px; padding: 0 12px;
+  border: 0; border-radius: var(--radius-sm);
+  font: inherit; font-size: 13px; font-weight: 620; letter-spacing: -.004em;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+button.act:active { transform: scale(.985); }
+button.act:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+button.primary { background: var(--brand); color: var(--brand-ink); }
+button.primary:hover { background: var(--brand-hover); }
+button.quiet { background: none; box-shadow: inset 0 0 0 1px var(--hairline-strong); color: var(--ink); }
+button.quiet:hover { background: var(--label); }
+
+/* ------------------------------------------------------------------ *
+ * L'elenco, su un modulo di accesso
+ * ------------------------------------------------------------------ */
+
+ul { list-style: none; padding: 0; margin: 12px 0 13px; max-height: 196px; overflow-y: auto; }
+li + li { margin-top: 6px; }
+li button {
+  width: 100%; text-align: left;
+  display: block;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 0; border-radius: var(--radius-sm);
+  background: var(--label);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+li button:hover, li button[data-active='true'] { background: var(--label-hover); }
+li button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+li .address__text { font-size: 12.5px; }
+li .meta {
+  margin-top: 3px;
+  font-family: var(--ui);
+  font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Attesa
+ * ------------------------------------------------------------------ */
+
+/*
+ * Non una rotella: la forma di quello che sta per arrivare.
+ *
+ * Chi guarda sa gia' dove comparira' l'indirizzo, e quando compare non deve
+ * ridisegnarsi mezzo pannello sotto gli occhi.
+ */
+.skeleton {
+  height: 52px; margin: 13px 0 14px;
+  border-radius: var(--radius-sm);
+  background: var(--label);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  position: relative; overflow: hidden;
+}
+.skeleton::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, var(--label-hover), transparent);
+  animation: sweep 1.25s var(--ease) infinite;
+}
+
+/* ------------------------------------------------------------------ *
+ * Tema scuro
+ *
+ * Scritto due volte di proposito: su Mullvad Browser e LibreWolf
+ * resistFingerprinting fa rispondere "light" alla media query per tutti,
+ * sempre, quindi la scelta esplicita dell'utente deve poter vincere. I
+ * selettori sono piatti e non annidati, perche' la nidificazione CSS e'
+ * arrivata in Firefox 117 e la base ESR di quei due browser e' la 115:
+ * annidare avrebbe spento il tema scuro proprio dove serve.
+ * ------------------------------------------------------------------ */
+
+@media (prefers-color-scheme: dark) {
+  :host(:not([data-skudo-theme='light'])) .scope {
+${TOKENS_DARK}
+  }
+}
+
+:host([data-skudo-theme='dark']) .scope {
+${TOKENS_DARK}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important }
+}
+`
+
 /**
  * Il tema scelto dall'utente, se ne ha scelto uno.
  *
  * `auto` non stampa niente e lascia decidere alla media query. Le altre due
- * vincono su di essa, che e' tutto il punto: vedi il commento sul tema scuro
- * dentro STYLE.
+ * vincono su di essa, che e' tutto il punto: vedi il commento sul tema scuro.
  */
 let theme = 'auto'
 
@@ -294,39 +408,47 @@ export function setTheme(next) {
   theme = next === 'dark' || next === 'light' ? next : 'auto'
 }
 
+/**
+ * Crea un ospite isolato, posizionato in assoluto sul documento.
+ *
+ * @returns {{host: HTMLElement, scope: HTMLElement}}
+ */
 function createHost() {
   const host = document.createElement('skudo-anchor')
   host.style.cssText = 'all:initial;position:absolute;top:0;left:0;z-index:2147483646;display:block'
   if (theme !== 'auto') host.setAttribute('data-skudo-theme', theme)
 
-  // `closed`: dalla pagina, `host.shadowRoot` è null. Il nostro markup non è
-  // né leggibile né modificabile dal JavaScript del sito.
   const root = host.attachShadow({ mode: 'closed' })
 
   const style = document.createElement('style')
   style.textContent = STYLE
   root.appendChild(style)
 
-  return { host, root }
+  // I token stanno su un elemento interno e non su `:host`, cosi' `all: initial`
+  // sull'ospite non se li porta via.
+  const scope = document.createElement('div')
+  scope.className = 'scope'
+  root.appendChild(scope)
+
+  return { host, scope }
 }
 
 /** L'icona accanto al campo. */
 export function createIcon({ title, onActivate }) {
-  const { host, root } = createHost()
+  const { host, scope } = createHost()
 
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'icon'
   button.title = title
   button.setAttribute('aria-label', title)
-  // Costante nostra, nessun dato: l'unico innerHTML del file.
-  button.innerHTML = MARK
+  button.appendChild(markNode(ICON_SIZE))
   button.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
     onActivate()
   })
-  root.appendChild(button)
+  scope.appendChild(button)
 
   return {
     host,
@@ -334,12 +456,7 @@ export function createIcon({ title, onActivate }) {
       host.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
     },
     /**
-     * L'icona è al posto definitivo: si può mostrare.
-     *
-     * Chiamata dal ciclo di posizionamento dopo il primo controllo delle icone
-     * altrui. Prima di allora la posizione è una supposizione, e mostrarla
-     * significherebbe farla saltare sotto gli occhi di chi sta leggendo la
-     * pagina di qualcun altro.
+     * L'icona e' al posto definitivo: si puo' mostrare. Vedi `.icon` in STYLE.
      */
     setReady() {
       button.dataset.ready = 'true'
@@ -358,49 +475,59 @@ export function createIcon({ title, onActivate }) {
 /**
  * Il pannello sotto il campo.
  *
- * Un pannello e non un lampo di colore: quando qualcosa non funziona, l'utente
- * deve leggere cosa, non indovinarlo. Il contorno rosso che c'era prima
- * significava insieme "non sei collegato", "il limite è finito" e "la rete non
+ * Un pannello e non un lampo di colore: quando qualcosa non funziona, chi lo
+ * legge deve sapere cosa, non indovinarlo. Il contorno rosso che c'era prima
+ * significava insieme "non sei collegato", "il limite e' finito" e "la rete non
  * risponde", e nessuna delle tre si capiva.
  */
-export function createPanel() {
-  const { host, root } = createHost()
+export function createPanel({ site = '' } = {}) {
+  const { host, scope } = createHost()
 
   const panel = document.createElement('div')
   panel.className = 'panel'
+  scope.appendChild(panel)
 
-  const inner = document.createElement('div')
-  inner.className = 'panel__body'
-  panel.appendChild(inner)
-
-  // Chi parla. Un riquadro che compare sopra un campo senza dire da chi viene
-  // è indistinguibile da quello che farebbe una pagina malintenzionata, e
-  // l'abitudine a fidarsene è esattamente quella da non insegnare.
-  const brandline = document.createElement('div')
-  brandline.className = 'brandline'
-  brandline.appendChild(markNode())
-  const brandName = document.createElement('span')
-  brandName.textContent = 'Skudo'
-  brandline.appendChild(brandName)
-  inner.appendChild(brandline)
+  /*
+   * Chi parla, e per chi.
+   *
+   * Un riquadro che compare sopra un campo senza dire da chi viene e'
+   * indistinguibile da quello che farebbe una pagina malintenzionata, e
+   * l'abitudine a fidarsene e' quella da non insegnare. Il nome del sito
+   * accanto non e' decorazione: dice a quale indirizzo questo alias resta
+   * legato, che e' la cosa che si dimentica.
+   */
+  const head = document.createElement('div')
+  head.className = 'head'
+  const mark = markNode(15)
+  mark.classList.add('head__mark')
+  head.appendChild(mark)
+  const name = document.createElement('span')
+  name.className = 'head__name'
+  name.textContent = 'Skudo'
+  head.appendChild(name)
+  if (site) {
+    const where = document.createElement('span')
+    where.className = 'head__site'
+    where.textContent = `for ${site}`
+    head.appendChild(where)
+  }
+  panel.appendChild(head)
 
   const body = document.createElement('div')
-  inner.appendChild(body)
-
-  root.appendChild(panel)
+  body.className = 'body'
+  panel.appendChild(body)
 
   /**
    * Anima l'altezza fra due stati.
    *
-   * Il pannello passa da "sto creando" a "ecco l'alias" cambiando altezza di
-   * una cinquantina di pixel. Senza questo scatta, e uno scatto sopra il
-   * contenuto di qualcun altro sembra un difetto della pagina. Si misura
-   * prima, si cambia, si misura dopo, e si lascia fare al CSS.
+   * Il pannello passa da "sto creando" a "ecco l'alias" cambiando altezza. Senza
+   * questo scatta, e uno scatto sopra il contenuto di qualcun altro sembra un
+   * difetto della pagina.
    */
   const resize = (change) => {
     const before = panel.offsetHeight
     change()
-    const after = inner.offsetHeight
+    const after = head.offsetHeight + body.offsetHeight + 3
 
     if (!before || before === after) {
       panel.style.height = ''
@@ -408,18 +535,9 @@ export function createPanel() {
     }
 
     panel.style.height = `${before}px`
-    // Una lettura forzata: senza, il browser accorpa le due assegnazioni e non
-    // c'è nessuna transizione da animare.
     void panel.offsetHeight
     panel.style.height = `${after}px`
-
-    panel.addEventListener(
-      'transitionend',
-      () => {
-        panel.style.height = ''
-      },
-      { once: true }
-    )
+    panel.addEventListener('transitionend', () => (panel.style.height = ''), { once: true })
   }
 
   const clear = () => {
@@ -432,6 +550,69 @@ export function createPanel() {
     el.textContent = text
     body.appendChild(el)
     return el
+  }
+
+  /** Il titolo, con il bollo quando c'e' qualcosa da festeggiare. */
+  const title = (text, { stamped = false } = {}) => {
+    const el = document.createElement('div')
+    el.className = 'title'
+    if (stamped) {
+      const stamp = document.createElement('span')
+      stamp.className = 'stamp'
+      stamp.appendChild(strokeIcon(TICK_PATHS, 12))
+      el.appendChild(stamp)
+    }
+    const label = document.createElement('span')
+    label.textContent = text
+    el.appendChild(label)
+    body.appendChild(el)
+    return el
+  }
+
+  /** Il blocco dell'indirizzo, con il bottone che lo copia. */
+  const addressBlock = (email, { flash = false } = {}) => {
+    const wrap = document.createElement('div')
+    wrap.className = 'address'
+    wrap.appendChild(addressNode(email))
+
+    const copy = document.createElement('button')
+    copy.type = 'button'
+    copy.className = 'copy'
+    copy.title = 'Copy'
+    copy.setAttribute('aria-label', `Copy ${email}`)
+    copy.appendChild(strokeIcon(COPY_PATHS))
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(email)
+      } catch {
+        // Il permesso puo' mancare: l'indirizzo resta selezionabile a mano, e
+        // fingere che sia andata sarebbe peggio che non dire niente.
+        return
+      }
+      copy.dataset.done = 'true'
+      copy.textContent = ''
+      copy.appendChild(strokeIcon(TICK_PATHS))
+      copy.title = 'Copied'
+      flashOnce(wrap)
+      setTimeout(() => {
+        copy.dataset.done = 'false'
+        copy.textContent = ''
+        copy.appendChild(strokeIcon(COPY_PATHS))
+        copy.title = 'Copy'
+      }, 1600)
+    })
+    wrap.appendChild(copy)
+
+    body.appendChild(wrap)
+    if (flash) flashOnce(wrap)
+    return wrap
+  }
+
+  const flashOnce = (el) => {
+    el.dataset.flash = 'false'
+    void el.offsetWidth
+    el.dataset.flash = 'true'
+    setTimeout(() => (el.dataset.flash = 'false'), 700)
   }
 
   const actions = (buttons) => {
@@ -459,37 +640,35 @@ export function createPanel() {
     working(text) {
       resize(() => {
         clear()
-        const wrap = document.createElement('div')
-        wrap.className = 'working'
-        const spinner = document.createElement('div')
-        spinner.className = 'spinner'
-        const label = document.createElement('span')
-        label.textContent = text
-        wrap.append(spinner, label)
-        body.appendChild(wrap)
+        title(text)
+        const skeleton = document.createElement('div')
+        skeleton.className = 'skeleton'
+        body.appendChild(skeleton)
       })
     },
 
     /**
      * Alias scritto nel campo.
      *
-     * Due casi, e la differenza va detta. Appena creato: si può disfare.
-     * Ripescato da questa sessione perché al sito era già stato dato quello:
-     * disfare non ha senso (non è stato creato adesso, e potrebbe già essere
-     * stato inviato in un altro modulo della stessa pagina), e quello che
-     * serve è poterne chiedere un altro apposta.
+     * Due casi, e la differenza va detta. Appena creato: si puo' disfare.
+     * Ripescato da questa sessione perche' al sito era gia' stato dato quello:
+     * disfare non ha senso, e quello che serve e' poterne chiedere un altro
+     * apposta.
      */
     created({ email, reused = false, onUndo, onDone, onFresh }) {
       resize(() => {
         clear()
-        line('title', reused ? 'Same alias as before' : 'Alias filled in')
+        title(reused ? 'Same alias as before' : 'Alias filled in', { stamped: !reused })
+        addressBlock(email, { flash: !reused })
         line(
-          'sub',
+          'note',
           reused
-            ? 'This is the one you already gave this site. Reusing it keeps their view of you in one place.'
-            : 'Mail sent here reaches your inbox. Nobody learns your real address.'
+            ? `This is the one you already gave ${site || 'this site'}. Reusing it keeps everything they know about you in one place.`
+            : `Mail sent here reaches your inbox. ${site || 'This site'} never learns your real address.`
         )
-        line('alias', email)
+        const spacer = document.createElement('div')
+        spacer.style.height = '13px'
+        body.appendChild(spacer)
         actions(
           reused
             ? [
@@ -504,23 +683,43 @@ export function createPanel() {
       })
     },
 
-    /** Alias già esistenti per questo sito, su un modulo di accesso. */
+    /** Alias gia' esistenti per questo sito, su un modulo di accesso. */
     choose({ aliases, onPick, onDismiss }) {
       resize(() => {
         clear()
-        line('title', 'You already have an alias here')
-        line('sub', 'Signing in? Use the one you gave this site before.')
+        title('Use the one you already have')
+        line('note', `Signing in? These are the aliases ${site || 'this site'} already knows.`)
+
         const list = document.createElement('ul')
         for (const alias of aliases) {
           const item = document.createElement('li')
           const button = document.createElement('button')
           button.type = 'button'
-          button.textContent = alias.email
+          button.appendChild(addressNode(alias.email))
+          if (alias.description) {
+            const meta = document.createElement('div')
+            meta.className = 'meta'
+            meta.textContent = alias.description
+            button.appendChild(meta)
+          }
           button.addEventListener('click', () => onPick(alias))
           item.appendChild(button)
           list.appendChild(item)
         }
         body.appendChild(list)
+
+        // Le frecce scorrono l'elenco, Invio sceglie. Su un modulo di accesso
+        // le mani sono gia' sulla tastiera.
+        list.addEventListener('keydown', (event) => {
+          const buttons = [...list.querySelectorAll('button')]
+          const at = buttons.indexOf(document.activeElement)
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            const next = at + (event.key === 'ArrowDown' ? 1 : -1)
+            buttons[Math.max(0, Math.min(buttons.length - 1, next))]?.focus()
+          }
+        })
+
         actions([{ label: 'Close', kind: 'quiet', onClick: onDismiss }])
       })
     },
@@ -529,8 +728,14 @@ export function createPanel() {
     signedOut({ onConnect, onDismiss }) {
       resize(() => {
         clear()
-        line('title', 'Connect Skudo first')
-        line('sub', 'One click, nothing to copy. Then this icon makes aliases for you.')
+        title('Connect Skudo first')
+        line(
+          'note',
+          'One click on a Skudo page, nothing to copy. Then this icon makes an alias every time a site asks for your address.'
+        )
+        const spacer = document.createElement('div')
+        spacer.style.height = '14px'
+        body.appendChild(spacer)
         actions([
           { label: 'Not now', kind: 'quiet', onClick: onDismiss },
           { label: 'Connect', kind: 'primary', onClick: onConnect },
@@ -541,8 +746,11 @@ export function createPanel() {
     failed({ message, onDismiss }) {
       resize(() => {
         clear()
-        line('title', 'That did not work')
-        line('sub bad', message)
+        title('That did not work')
+        line('note bad', message)
+        const spacer = document.createElement('div')
+        spacer.style.height = '14px'
+        body.appendChild(spacer)
         actions([{ label: 'Close', kind: 'quiet', onClick: onDismiss }])
       })
     },

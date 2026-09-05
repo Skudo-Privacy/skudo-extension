@@ -1,83 +1,109 @@
 /*
  * Pagina di collegamento.
  *
- * È una pagina dell'estensione aperta in una scheda, non il popup, e la
- * ragione è di sicurezza prima che di grafica: il codice di conferma va
- * confrontato con quello mostrato su un'altra scheda, e un popup si chiude nel
- * momento esatto in cui si guarda altrove. Vedi src/shared/pairing.js.
+ * E' una pagina dell'estensione aperta in una scheda, non il popup, e la
+ * ragione e' pratica: l'attesa dura fino a due minuti, il popup si chiude nel
+ * momento esatto in cui si guarda un'altra scheda, e il flusso richiede
+ * proprio di guardare un'altra scheda. Vedi src/connect.js.
+ *
+ * I colori arrivano da tokens.css, come il popup e come il pannello che compare
+ * dentro le pagine: e' lo stesso prodotto e deve sembrarlo.
  */
 
 body.connect {
   width: auto;
   min-height: 100vh;
-  padding: 48px 20px;
+  padding: 56px 20px;
   display: flex;
   justify-content: center;
-  background: var(--bg-sunken);
+  background: var(--label);
+}
+
+/* Il filo in cima vale per tutte le nostre superfici, questa compresa. */
+body.connect::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand) 0 72%, var(--signal) 72% 100%);
 }
 
 .sheet {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   align-self: flex-start;
-  padding: 28px;
+  padding: 30px;
   border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 4px 16px rgba(0, 0, 0, 0.07);
+  background: var(--paper);
+  box-shadow: var(--shadow);
 }
 
 .sheet__head {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-bottom: 22px;
-  font-weight: 600;
+  margin-bottom: 24px;
+  font-size: 13px;
+  font-weight: 640;
+  letter-spacing: -0.007em;
+}
+
+.sheet__head img {
+  border-radius: 5px;
 }
 
 .step h1 {
-  margin: 0 0 6px;
-  font-size: 19px;
+  margin: 0 0 7px;
+  font-size: 20px;
   font-weight: 650;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
 }
 
 .step .lede {
-  margin: 0 0 20px;
-  color: var(--ink-dim);
-  line-height: 1.5;
+  margin: 0 0 22px;
+  max-width: 46ch;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .waiting {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin: 18px 0;
-  color: var(--ink-dim);
-  font-size: 13px;
+  gap: 10px;
+  margin: 20px 0;
+  padding: 13px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--label);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
 .spinner--dark {
-  border-color: color-mix(in srgb, var(--ink) 15%, transparent);
+  border-color: var(--hairline-strong);
   border-top-color: var(--brand);
 }
 
 .note {
-  margin: 14px 0 0;
-  color: var(--ink-dim);
+  margin: 16px 0 0;
+  color: var(--muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
+/*
+ * Il bollo di conferma, lo stesso del pannello: compare quando e' fatto, e
+ * niente altro usa questo colore.
+ */
 .tick {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   width: 46px;
   height: 46px;
-  margin-bottom: 16px;
+  margin: 0 auto 18px;
   border-radius: 50%;
   background: var(--signal);
+  color: #16210a;
 }

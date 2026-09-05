@@ -12,7 +12,7 @@
  * autonomo per contesto elimina la questione.
  */
 
-import { cp, mkdir, readFile, rm } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import esbuild from 'esbuild'
@@ -51,7 +51,31 @@ const bundles = [
   { in: join(src, 'connect.js'), out: join(out, 'connect.js') },
 ]
 
+/**
+ * I token del sistema visivo, scritti come foglio di stile.
+ *
+ * Il pannello iniettato li prende da `src/shared/tokens.js` come stringa,
+ * perche' vive dentro uno shadow root e non puo' linkare un file. Il popup e la
+ * pagina di collegamento sono documenti veri e un file lo linkano. Generarlo da
+ * quello stesso modulo e' l'unico modo per non ritrovarsi due tavolozze che
+ * divergono di quattro punti di grigio: una differenza che non si nota
+ * guardando e si nota usando.
+ */
+async function writeTokens() {
+  const { TOKENS, TOKENS_DARK } = await import(join(src, 'shared', 'tokens.js'))
+
+  await writeFile(
+    join(out, 'tokens.css'),
+    `/* Generato da src/shared/tokens.js. Non modificare a mano. */\n` +
+      `:root {\n${TOKENS.trimEnd()}\n}\n\n` +
+      `@media (prefers-color-scheme: dark) {\n` +
+      `  :root:not([data-theme='light']) {\n${TOKENS_DARK.trimEnd()}\n  }\n}\n\n` +
+      `:root[data-theme='dark'] {\n${TOKENS_DARK.trimEnd()}\n}\n`
+  )
+}
+
 async function copyStatic() {
+  await writeTokens()
   await cp(join(src, 'manifest.json'), join(out, 'manifest.json'))
   await cp(join(src, 'popup.html'), join(out, 'popup.html'))
   await cp(join(src, 'popup.css'), join(out, 'popup.css'))
