@@ -27,7 +27,7 @@
  */
 
 import { foreignShift, iconPosition, panelPosition } from './content/anchor.js'
-import { createIcon, createPanel } from './content/ui.js'
+import { createIcon, createPanel, setTheme } from './content/ui.js'
 import { findEmailFields } from './detector/index.js'
 import { api } from './shared/browser.js'
 
@@ -191,6 +191,14 @@ function place(entry) {
     entry.icon.move({ left, top })
   }
 
+  // Si mostra solo dopo il primo controllo delle icone altrui. Prima di
+  // allora la posizione è una supposizione, e mostrarla vuol dire farla
+  // saltare di venti pixel sotto gli occhi di chi sta leggendo la pagina.
+  if (!entry.revealed && entry.shiftCheckedAt > 0) {
+    entry.revealed = true
+    entry.icon.setReady()
+  }
+
   if (entry.panel) entry.panel.move(panelPosition(rect))
 
   const moved = !settled || entry.moved
@@ -220,6 +228,7 @@ function attach(field) {
     top: NaN,
     shift: 0,
     shiftCheckedAt: -Infinity,
+    revealed: false,
     moved: false,
     busy: false,
   }
@@ -441,6 +450,13 @@ function scheduleScan() {
 }
 
 function start() {
+  // Il tema, chiesto una volta sola. Nessun segreto passa di qui: e' la stessa
+  // risposta che riceve il popup, meno il token, che non esce mai dal contesto
+  // di sfondo.
+  send('GET_STATE').then((response) => {
+    if (response?.ok) setTheme(response.data.theme)
+  })
+
   scan()
 
   const wake = () => schedule()
