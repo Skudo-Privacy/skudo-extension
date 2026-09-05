@@ -146,3 +146,69 @@ describe('username come indirizzo', () => {
     expect(fields).toHaveLength(1)
   })
 })
+
+describe('recupero password', () => {
+  // Il caso che ci mancava, e che sbagliavamo nel modo peggiore: proponevamo un
+  // alias NUOVO a chi sta cercando di rientrare in un account che ha già. Quel
+  // indirizzo non riceve nessuna email di recupero, e l'utente resta fuori
+  // senza capire il motivo.
+  it('riconosce una pagina "password dimenticata"', () => {
+    const { intent } = intentOf(`
+      <form action="/password/reset">
+        <h1>Reset your password</h1>
+        <p>Enter your email and we will send you a link.</p>
+        <label for="e">Email</label><input type="email" id="e" name="email">
+        <button>Send link</button>
+      </form>
+    `)
+    expect(intent).toBe('recovery')
+  })
+
+  it('propone il riuso, non la creazione, su un recupero', () => {
+    const container = mount(`
+      <form action="/forgot-password">
+        <input type="email" name="email">
+        <button>Send me a reset link</button>
+      </form>
+    `)
+    const [field] = findEmailFields(container, { env })
+    expect(field.formIntent).toBe('recovery')
+    expect(field.action).toBe('reuse')
+  })
+
+  it('riconosce un cambio password, che non è né accesso né iscrizione', () => {
+    const { intent } = intentOf(`
+      <form>
+        <input type="email" name="email">
+        <input type="password" name="current" autocomplete="current-password">
+        <input type="password" name="next" autocomplete="new-password">
+        <button>Change password</button>
+      </form>
+    `)
+    expect(intent).toBe('recovery')
+  })
+
+  it('non scambia per recupero una registrazione che nomina la password', () => {
+    const { intent } = intentOf(`
+      <form action="/register">
+        <label for="e">Email</label><input type="email" id="e" name="email">
+        <input type="password" name="password" autocomplete="new-password">
+        <button>Create account</button>
+      </form>
+    `)
+    expect(intent).toBe('signup')
+  })
+
+  it('non scambia per recupero un accesso col link "password dimenticata"', () => {
+    // Il link c'è quasi su ogni modulo di accesso: da solo non fa un recupero.
+    const { intent } = intentOf(`
+      <form action="/login">
+        <input type="email" name="email">
+        <input type="password" name="password" autocomplete="current-password">
+        <a href="/forgot">Forgot your password?</a>
+        <button>Sign in</button>
+      </form>
+    `)
+    expect(intent).toBe('login')
+  })
+})

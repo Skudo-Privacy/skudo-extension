@@ -33,7 +33,7 @@ const SCORE_THRESHOLD = 0.5
  * @property {'certain'|'likely'} confidence
  * @property {number} score              probabilità 0..1 (1 per i campi certi)
  * @property {string[]} signals          quali segnali si sono accesi
- * @property {'signup'|'login'|'unknown'} formIntent
+ * @property {'signup'|'login'|'recovery'|'unknown'} formIntent
  * @property {boolean} isConfirmation    seconda casella di "email / conferma email"
  * @property {'create'|'reuse'|'repeat'} action  cosa proporre all'utente
  */
@@ -63,7 +63,9 @@ function isCertain(input) {
  */
 function actionFor(formIntent, isConfirmation) {
   if (isConfirmation) return 'repeat'
-  return formIntent === 'login' ? 'reuse' : 'create'
+  // `recovery` sta con `login`: chi reimposta una password o ne cambia una sta
+  // usando un account che ha già, e un indirizzo nuovo lì non riceve niente.
+  return formIntent === 'login' || formIntent === 'recovery' ? 'reuse' : 'create'
 }
 
 /**

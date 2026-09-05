@@ -7,14 +7,49 @@
  * deve sopravvivere sta in `storage`.
  */
 
-import { SkudoApi, aliasEmail } from './shared/api.js'
+import { ApiError, SkudoApi, aliasEmail } from './shared/api.js'
 import { api } from './shared/browser.js'
 import { INSTANCE } from './shared/config.js'
 import { forgetSecret, rememberSecret, readSecret } from './shared/pairing.js'
 import { clearToken, getSettings, getToken, setSettings, setToken } from './shared/storage.js'
 
 const CONTEXT_MENU_ID = 'skudo-create-alias'
+
+/**
+ * Gli alias creati da poco, gli unici che il content script può cancellare.
+ *
+ * Il pannello offre "Undo" subito dopo aver creato un alias, e per farlo deve
+ * poterlo cancellare. Ma il content script gira dentro la pagina di un sito
+ * qualunque: dargli un verbo che cancella *qualsiasi* alias per identificativo
+ * significa che basta un modo per fargli mandare un messaggio — un bug nostro,
+ * un domani un'API del browser meno isolata — per svuotare l'account.
+ *
+ * Quindi la cancellazione vale solo per quello che quel tab ha appena creato, e
+ * solo per pochi minuti. È tutto quello che serve a "Undo".
+ */
+const UNDOABLE_KEY = 'undoableAliases'
+const UNDO_WINDOW_MS = 5 * 60 * 1000
 const CONTENT_SCRIPT_ID = 'skudo-field-icon'
+
+function undoStore() {
+  return api.storage.session ?? api.storage.local
+}
+
+async function rememberUndoable(id) {
+  const { [UNDOABLE_KEY]: entries = {} } = await undoStore().get({ [UNDOABLE_KEY]: {} })
+  const now = Date.now()
+  const kept = Object.fromEntries(
+    Object.entries(entries).filter(([, at]) => now - at < UNDO_WINDOW_MS)
+  )
+  kept[id] = now
+  await undoStore().set({ [UNDOABLE_KEY]: kept })
+}
+
+async function isUndoable(id) {
+  const { [UNDOABLE_KEY]: entries = {} } = await undoStore().get({ [UNDOABLE_KEY]: {} })
+  const at = entries[id]
+  return typeof at === 'number' && Date.now() - at < UNDO_WINDOW_MS
+}
 
 /** Costruisce il client leggendo token e impostazioni al momento dell'uso. */
 async function client() {
@@ -53,6 +88,8 @@ async function createAlias({ site = '' } = {}) {
     description: settings.describeWithSite && site ? site : '',
   })
 
+  await rememberUndoable(alias.id)
+
   return { id: alias.id, email: aliasEmail(alias), description: alias.description || '' }
 }
 
@@ -87,6 +124,18 @@ const handlers = {
 
   async ALIASES_FOR_SITE({ site }) {
     return aliasesForSite(typeof site === 'string' ? site.slice(0, 253) : '')
+  },
+
+  /**
+   * Apre la pagina di collegamento.
+   *
+   * Serve al content script: quando si clicca l'icona senza account
+   * collegato, il pannello offre di collegarlo, e il clic deve portare da
+   * qualche parte invece di fallire in silenzio.
+   */
+  async OPEN_CONNECT() {
+    await api.tabs.create({ url: api.runtime.getURL('connect.html') })
+    return { opened: true }
   },
 
   async GET_STATE() {
@@ -206,6 +255,10 @@ const handlers = {
   },
 
   async DELETE_ALIAS({ id }) {
+    // Solo quello appena creato, e solo per pochi minuti: vedi UNDOABLE_KEY.
+    if (!(await isUndoable(id))) {
+      throw new ApiError('That alias can no longer be undone from here.', { code: 'FORBIDDEN' })
+    }
     const skudo = await client()
     await skudo.deleteAlias(id)
     return { id }

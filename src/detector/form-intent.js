@@ -14,6 +14,19 @@
  * accesso si cerca quello che l'utente ha già per quel dominio e si offre di
  * riempirlo. Cambia cosa fa l'estensione, non solo cosa mostra.
  *
+ * ## Recupero password
+ *
+ * Terzo caso, che ci mancava e che avevamo sbagliato: la pagina "password
+ * dimenticata". Ha un campo email, non ha password, e con i soli segnali di
+ * prima veniva letta come "nessuna password, quindi probabilmente
+ * un'iscrizione" — cioè proponevamo un alias **nuovo** a chi sta cercando di
+ * rientrare in un account che ha già. Un indirizzo mai visto su quel modulo non
+ * riceve nessuna email di recupero, e l'utente resta fuori senza capire perché.
+ *
+ * Proton Pass distingue `RECOVERY` e `PASSWORD_CHANGE` dagli altri tipi di
+ * modulo, ed è il motivo per cui siamo andati a guardare. Per noi entrambi si
+ * comportano come l'accesso: si riusa, non si crea.
+ *
  * ## Come
  *
  * Punteggio con segno: positivo verso l'iscrizione, negativo verso l'accesso.
@@ -29,6 +42,8 @@
 import { attr, queryDeep } from './dom.js'
 
 const LOGIN_WORDS = /\b(log ?in|sign ?in|signin|accedi|entra|login)\b/i
+const RECOVERY_WORDS =
+  /\b(reset (your )?password|forgot (your )?password|password reset|recover (your )?account|account recovery|send (me )?(a )?(reset )?link|recupera|reimposta|password dimenticata)\b/i
 const SIGNUP_WORDS =
   /\b(sign ?up|signup|register|registrati|iscriviti|create (an )?account|crea (un )?account|get started|join|subscribe|iscrizione)\b/i
 const FORGOT_WORDS = /\b(forgot|dimenticat[ao]|reset your password|password dimenticata)\b/i
@@ -38,6 +53,32 @@ const TERMS_WORDS = /\b(terms|privacy policy|termini|informativa|condizioni)\b/i
 
 /** Soglia oltre la quale ci sbilanciamo. Sotto, resta `unknown`. */
 const DECISION_THRESHOLD = 3
+
+/**
+ * Il recupero non si decide a punteggio.
+ *
+ * Un modulo di reimpostazione password si riconosce da poche parole
+ * inequivocabili, e sbagliarlo costa molto: chi cerca di rientrare nel proprio
+ * account riceverebbe un alias nuovo e nessuna email. Quando quelle parole ci
+ * sono, la risposta è quella e non si somma con altro.
+ */
+function looksLikeRecovery(scope, scopeText, passwordCount) {
+  // Con una password nuova da confermare non è un recupero via email: è la
+  // schermata dove la si sceglie, e lì l'email non si tocca.
+  if (passwordCount > 0) return false
+
+  const identity = [
+    attr(scope, 'id'),
+    attr(scope, 'class'),
+    attr(scope, 'name'),
+    attr(scope, 'action'),
+  ].join(' ')
+  return (
+    RECOVERY_WORDS.test(scopeText) ||
+    RECOVERY_WORDS.test(identity) ||
+    /\bpassword\b/i.test(identity)
+  )
+}
 
 /** Quanti antenati risalire cercando il contenitore del modulo. */
 const MAX_ANCESTOR_HOPS = 6
@@ -100,6 +141,22 @@ export function detectFormIntent(input) {
   }
 
   const passwords = queryDeep(scope, 'input[type=password]')
+  const scopeTextEarly = (scope.textContent || '').replace(/\s+/g, ' ').slice(0, 2000)
+
+  if (looksLikeRecovery(scope, scopeTextEarly, passwords.length)) {
+    return { intent: 'recovery', score: 0, signals: ['recovery'] }
+  }
+
+  const autocompletesEarly = passwords.map((el) => attr(el, 'autocomplete'))
+  // Password attuale *e* nuova insieme: è un cambio password, non un accesso e
+  // non un'iscrizione. Un eventuale campo email lì è il proprio, non uno da
+  // inventare.
+  if (
+    autocompletesEarly.includes('current-password') &&
+    autocompletesEarly.includes('new-password')
+  ) {
+    return { intent: 'recovery', score: 0, signals: ['password-change'] }
+  }
 
   // Il segnale più netto in assoluto, quando c'è: lo standard prevede due valori
   // diversi proprio per distinguere i due casi, e chi li scrive sa cosa fa.
