@@ -4,8 +4,8 @@
  * ## Com'era, e perché non va bene
  *
  * addy.io fa aprire all'utente il pannello API, creare un token, copiarlo e
- * incollarlo. Sono sei passaggi, e alla fine c'è una chiave piena — che apre
- * l'intero account — passata per gli appunti di sistema, dove la legge
+ * incollarlo. Sono sei passaggi, e alla fine c'è una chiave piena, che apre
+ * l'intero account, passata per gli appunti di sistema, dove la legge
  * chiunque.
  *
  * SimpleLogin e Firefox Relay fanno meglio: una pagina sul loro dominio

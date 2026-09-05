@@ -132,6 +132,49 @@ describe('compatibilità del manifest', () => {
     expect(manifest.browser_specific_settings.gecko.id).toBe('extension@skudo.org')
   })
 
+  it('i verbi che leggono gli alias non sono raggiungibili da una pagina', () => {
+    // RECENT_ALIASES e SEARCH_ALIASES restituiscono alias che l'utente ha già.
+    // Un content script che potesse chiamarli darebbe a qualunque sito, per il
+    // tramite di un difetto nostro, un pezzo della mappa dei servizi a cui
+    // quella persona è iscritta: esattamente la cosa che Skudo esiste per non
+    // far sapere in giro.
+    const background = withoutComments(readFileSync(join(src, 'background.js'), 'utf8'))
+
+    for (const verb of ['RECENT_ALIASES', 'SEARCH_ALIASES', 'SET_ALIAS_ACTIVE']) {
+      const handler = background.slice(background.indexOf(`async ${verb}(`))
+      const body = handler.slice(0, handler.indexOf('\n  },'))
+      expect(body, `${verb} deve verificare l'origine del messaggio`).toMatch(/fromOurOwnUi\(sender\)/)
+    }
+  })
+
+  it('il content script non può cancellare un alias qualunque', () => {
+    // Può disfare quello che ha appena creato, e nient'altro. Vedi
+    // UNDOABLE_KEY in src/background.js.
+    const background = withoutComments(readFileSync(join(src, 'background.js'), 'utf8'))
+    const handler = background.slice(background.indexOf('async DELETE_ALIAS('))
+    const body = handler.slice(0, handler.indexOf('\n  },'))
+    expect(body).toMatch(/fromOurOwnUi\(sender\)/)
+    expect(body).toMatch(/isUndoable\(id\)/)
+  })
+
+  it('non chiede il permesso di leggere i dati dell account', () => {
+    // `account-details` era nell'insieme concesso e non lo usava nessuno:
+    // l'unico chiamante era sparito insieme al vecchio flusso di accesso. Un
+    // permesso che non serve è superficie regalata a chi ruba il token.
+    for (const file of sources) {
+      expect(file.code, file.path).not.toMatch(/account-details/)
+    }
+  })
+
+  it("uscire dall'account revoca il token sul server", () => {
+    // Cancellarlo dal disco del browser non basta: chi se lo fosse portato via
+    // prima non verrebbe toccato dall'uscita.
+    const background = withoutComments(readFileSync(join(src, 'background.js'), 'utf8'))
+    const handler = background.slice(background.indexOf('async SIGN_OUT('))
+    const body = handler.slice(0, handler.indexOf('\n  },'))
+    expect(body).toMatch(/revokeSelf\(\)/)
+  })
+
   it('non carica webextension-polyfill', () => {
     // Da MV3 le API di Chrome restituiscono promesse. Il polyfill costerebbe
     // una trentina di kilobyte caricati anche nel content script, cioè su

@@ -3,8 +3,8 @@
 Crea un alias email invece di dare il proprio indirizzo vero.
 
 Stato: **si carica e funziona**. Rilevamento, contesto di sfondo, content
-script e popup sono scritti e provati; mancano il token ad ambito ristretto
-lato server e la pubblicazione sugli store.
+script e popup sono scritti e provati. Il token ad ambito ristretto c'è, con
+scadenza e revoca. Manca la pubblicazione sugli store.
 
 ## Perché non è un fork
 
@@ -22,7 +22,7 @@ qui è portata e citata in [NOTICE.md](NOTICE.md).
 **Distingue un modulo di iscrizione da uno di accesso.** Nessuna delle
 estensioni per alias in circolazione lo fa: addy.io, SimpleLogin e Firefox Relay
 mettono il proprio pulsante su ogni campo email che trovano. Su un accesso
-l'alias nuovo è dannoso — l'utente lo inserisce, non entra, e si ritrova un
+l'alias nuovo è dannoso: l'utente lo inserisce, non entra, e si ritrova un
 indirizzo da cancellare. Qui su un accesso si propone l'alias che già esiste per
 quel dominio.
 
@@ -60,9 +60,10 @@ Il content script viene caricato su ogni pagina che l'utente apre, quindi il
 peso è un requisito e non un dettaglio.
 
 ```
-background.js    6.0 KB
-content.js      10.6 KB
-popup.js         4.6 KB
+background.js    9.2 KB
+content.js      19.4 KB
+popup.js         8.0 KB
+connect.js       1.7 KB
 ```
 
 Il pacchetto intero sta in 80 KB, contro alcune centinaia delle estensioni
@@ -74,7 +75,7 @@ per quattro segnali), niente `psl` (100 KB per ricavare il nome di un dominio).
 
 ```
 npm install
-npm test          # 62 prove
+npm test          # 79 prove
 npm run build     # produce dist/
 npm run dev       # ricostruisce a ogni salvataggio
 npm run format
@@ -82,16 +83,32 @@ npm run format
 
 Per caricarla in un browser: vedi [docs/BROWSERS.md](docs/BROWSERS.md).
 
+## Un sito, un alias
+
+Premere l'icona due volte non crea due indirizzi. Il primo alias dato a un sito
+resta quello per tutta la sessione del browser, e per averne un altro bisogna
+chiederlo dal pannello. Senza questa regola un modulo con due campi, o una
+persona che ripreme perché non ha visto il pannello, produce quattro o cinque
+alias per una sola iscrizione, e poi non c'è modo di sapere quale ha ricevuto
+davvero il sito.
+
+## Non si scavalca chi c'era prima
+
+Bitwarden, Proton Pass, 1Password e noi mettiamo l'icona nello stesso angolo del
+campo, e quella sotto non riceve nemmeno i clic. Non si vince alzando lo
+z-index: si guarda cosa c'è in quel punto e ci si sposta. Vedi
+`src/content/anchor.js`, che copre anche i due modi di occupare l'angolo che non
+lasciano un elemento da trovare.
+
 ## Cosa manca
 
-- **Token ad ambito ristretto**, lato Skudo. Oggi l'estensione usa un token
-  Sanctum pieno: chi riesce a leggerlo può cancellare l'account. Va aggiunto un
-  tipo di token che possa solo creare e leggere alias.
 - **Catture reali** nel corpus, per calibrare i pesi messi a mano.
 - **Prova sui browser veri**, Mullvad Browser e LibreWolf compresi.
-- **Pubblicazione** sugli store.
+- **Pubblicazione** sugli store, e la costruzione riproducibile che la
+  accompagna. Vedi [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Documenti
 
-- [docs/BROWSERS.md](docs/BROWSERS.md) — Firefox, Mullvad Browser, LibreWolf, Chrome
-- [NOTICE.md](NOTICE.md) — da dove viene il lavoro derivato
+- [docs/SECURITY.md](docs/SECURITY.md), cosa protegge e cosa no
+- [docs/BROWSERS.md](docs/BROWSERS.md), i quattro browser
+- [NOTICE.md](NOTICE.md), da dove viene il lavoro derivato

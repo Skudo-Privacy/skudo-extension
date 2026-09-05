@@ -158,9 +158,41 @@ export class SkudoApi {
     return data || []
   }
 
-  /** Il token è valido? Usato solo al momento dell'accesso. */
-  async verifyToken() {
-    return this.request('/api/v1/account-details')
+  /**
+   * Gli alias più recenti, per il popup aperto senza un sito davanti.
+   *
+   * Il server tiene comunque venti righe per un token ristretto, qualunque cosa
+   * chieda il client: vedi TokenAbilities::RESTRICTED_PAGE_LIMIT. Il limite non
+   * è qui perché un limite che sta solo nel client non è un limite.
+   */
+  async recentAliases() {
+    const params = new URLSearchParams({
+      'filter[deleted]': 'without',
+      'page[size]': '20',
+      sort: '-created_at',
+    })
+    const { data } = await this.request(`/api/v1/aliases?${params}`)
+    return data || []
+  }
+
+  /** Attiva o disattiva un alias. */
+  async setAliasActive(id, active) {
+    if (active) {
+      await this.request('/api/v1/active-aliases', { method: 'POST', body: { id } })
+    } else {
+      await this.request(`/api/v1/active-aliases/${id}`, { method: 'DELETE' })
+    }
+  }
+
+  /**
+   * Toglie questo token dal server.
+   *
+   * Uscire cancellava il token dal disco del browser e basta: sul server
+   * restava valido per sempre, quindi chi se lo fosse portato via prima non
+   * veniva toccato dall'uscita. Ora esce davvero.
+   */
+  async revokeSelf() {
+    await this.request('/api/v1/tokens/current', { method: 'DELETE' })
   }
 }
 

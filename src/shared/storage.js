@@ -4,7 +4,7 @@
  * ## Perché `storage.local` e mai `storage.sync`
  *
  * addy.io e SimpleLogin tengono la chiave API in `browser.storage.sync`. È
- * comodo — l'utente accede su un browser e si ritrova configurato sugli altri —
+ * comodo (l'utente accede su un browser e si ritrova configurato sugli altri)
  * e per un servizio qualunque sarebbe una scelta ragionevole.
  *
  * Per noi no. `sync` significa che la chiave viene caricata sui server di

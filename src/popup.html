@@ -59,9 +59,24 @@
         </div>
       </div>
 
-      <div id="existing" hidden>
-        <h2 class="heading">Already on this site</h2>
-        <ul class="list" id="existing-list"></ul>
+      <!--
+        L'elenco. Con un sito davanti mostra gli alias di quel sito; senza,
+        gli ultimi creati. La casella di ricerca c'è in tutti e due i casi,
+        perché "qual era l'indirizzo che ho dato a quel negozio" è la domanda
+        per cui si apre questo popup quando non si sta compilando niente.
+      -->
+      <div id="browse">
+        <label class="field search">
+          <span class="sr-only">Search your aliases</span>
+          <input type="search" id="search" placeholder="Search your aliases" autocomplete="off" />
+        </label>
+
+        <h2 class="heading" id="list-heading">Recent aliases</h2>
+        <p class="empty" id="list-empty" hidden>Nothing here yet.</p>
+        <ul class="list" id="alias-list"></ul>
+        <p class="note" id="list-note" hidden>
+          Showing the most recent. Search above, or open Skudo for the full list.
+        </p>
       </div>
     </section>
 

@@ -95,7 +95,7 @@ export const SIGNALS = [
       labels.some((text) => looksLikeFieldLabel(text) && EMAIL_LOOSE.test(text)),
   },
 
-  // — da qui in giù: nostri, non calibrati —
+  // Da qui in giù: nostri, non calibrati.
 
   {
     // "customer_email", "billing-email-address": non è una corrispondenza

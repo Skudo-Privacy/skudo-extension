@@ -4,7 +4,7 @@
  * ## Perché una pagina e non il popup
  *
  * L'attesa dura fino a due minuti. Il contesto di sfondo viene spento quando
- * è inattivo — su Chromium è un service worker, su Gecko una event page — e un
+ * è inattivo (su Chromium è un service worker, su Gecko una event page) e un
  * ciclo di attesa avviato lì non sopravvive: `alarms` ha una granularità di un
  * minuto, troppo grossa per una richiesta che ne vive due. Una scheda aperta
  * invece resta viva finché è aperta, e ogni messaggio che manda risveglia lo

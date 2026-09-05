@@ -21,8 +21,8 @@ const CONTEXT_MENU_ID = 'skudo-create-alias'
  * Il pannello offre "Undo" subito dopo aver creato un alias, e per farlo deve
  * poterlo cancellare. Ma il content script gira dentro la pagina di un sito
  * qualunque: dargli un verbo che cancella *qualsiasi* alias per identificativo
- * significa che basta un modo per fargli mandare un messaggio — un bug nostro,
- * un domani un'API del browser meno isolata — per svuotare l'account.
+ * significa che basta un modo per fargli mandare un messaggio, un bug
+ * nostro o un domani un'API del browser meno isolata, per svuotare l'account.
  *
  * Quindi la cancellazione vale solo per quello che quel tab ha appena creato, e
  * solo per pochi minuti. È tutto quello che serve a "Undo".
@@ -30,6 +30,24 @@ const CONTEXT_MENU_ID = 'skudo-create-alias'
 const UNDOABLE_KEY = 'undoableAliases'
 const UNDO_WINDOW_MS = 5 * 60 * 1000
 const CONTENT_SCRIPT_ID = 'skudo-field-icon'
+
+/**
+ * L'alias già dato a un sito in questa sessione del browser.
+ *
+ * Senza questo, ogni pressione dell'icona creava un indirizzo nuovo. Su un
+ * modulo con due campi, o su chi ripreme perché non ha visto il pannello, si
+ * arriva a cinque alias per una sola iscrizione: l'elenco dell'utente si
+ * riempie di indirizzi che non riceveranno mai niente, e non c'è modo di
+ * sapere quale dei cinque ha dato davvero al sito.
+ *
+ * Un sito, un alias, finché il browser resta aperto. Cambiarlo resta possibile,
+ * ma deve essere una scelta esplicita: vedi il parametro `fresh`.
+ *
+ * `storage.session` e non `local`: la memoria di cosa si è dato a chi non ha
+ * motivo di essere scritta sul disco, e alla riapertura del browser l'elenco
+ * vero è comunque quello sul server.
+ */
+const SESSION_ALIAS_KEY = 'sessionAliases'
 
 function undoStore() {
   return api.storage.session ?? api.storage.local
@@ -49,6 +67,25 @@ async function isUndoable(id) {
   const { [UNDOABLE_KEY]: entries = {} } = await undoStore().get({ [UNDOABLE_KEY]: {} })
   const at = entries[id]
   return typeof at === 'number' && Date.now() - at < UNDO_WINDOW_MS
+}
+
+async function sessionAliases() {
+  const { [SESSION_ALIAS_KEY]: entries = {} } = await undoStore().get({ [SESSION_ALIAS_KEY]: {} })
+  return entries
+}
+
+async function rememberSessionAlias(site, alias) {
+  if (!site) return
+  const entries = await sessionAliases()
+  entries[site] = alias
+  await undoStore().set({ [SESSION_ALIAS_KEY]: entries })
+}
+
+/** Toglie un alias dalla memoria di sessione, ovunque sia. Usato da "Undo". */
+async function forgetSessionAlias(id) {
+  const entries = await sessionAliases()
+  const kept = Object.fromEntries(Object.entries(entries).filter(([, a]) => a.id !== id))
+  await undoStore().set({ [SESSION_ALIAS_KEY]: kept })
 }
 
 /** Costruisce il client leggendo token e impostazioni al momento dell'uso. */
@@ -76,9 +113,19 @@ function siteName(url) {
 
 /**
  * Crea un alias e restituisce l'indirizzo.
- * @param {{site?: string}} options
+ *
+ * Se in questa sessione a questo sito ne è già stato dato uno, torna quello:
+ * vedi SESSION_ALIAS_KEY. `fresh` è l'unico modo per averne un altro, e arriva
+ * solo da un bottone che l'utente ha premuto apposta.
+ *
+ * @param {{site?: string, fresh?: boolean}} options
  */
-async function createAlias({ site = '' } = {}) {
+async function createAlias({ site = '', fresh = false } = {}) {
+  if (!fresh && site) {
+    const existing = (await sessionAliases())[site]
+    if (existing) return { ...existing, reused: true }
+  }
+
   const settings = await getSettings()
   const skudo = await client()
 
@@ -88,9 +135,23 @@ async function createAlias({ site = '' } = {}) {
     description: settings.describeWithSite && site ? site : '',
   })
 
-  await rememberUndoable(alias.id)
+  const created = { id: alias.id, email: aliasEmail(alias), description: alias.description || '' }
 
-  return { id: alias.id, email: aliasEmail(alias), description: alias.description || '' }
+  await rememberUndoable(created.id)
+  await rememberSessionAlias(site, created)
+
+  return { ...created, reused: false }
+}
+
+/** La forma con cui un alias esce da qui. Mai più campi di quelli che servono. */
+function describeAlias(alias) {
+  return {
+    id: alias.id,
+    email: aliasEmail(alias),
+    description: alias.description || '',
+    active: alias.active !== false,
+    createdAt: alias.created_at || '',
+  }
 }
 
 /** Gli alias che l'utente ha già per un sito, per proporre il riuso. */
@@ -112,14 +173,32 @@ async function aliasesForSite(site) {
  * ------------------------------------------------------------------ */
 
 /**
+ * Il messaggio viene da una pagina web o da codice nostro?
+ *
+ * `sender.tab` c'è solo quando il mittente è un content script, cioè codice che
+ * gira dentro la pagina di un sito qualunque insieme al suo JavaScript. Il
+ * popup e la pagina di collegamento non hanno scheda: sono documenti
+ * dell'estensione, e nessun sito può farsi passare per loro.
+ *
+ * È la distinzione su cui si regge tutto il resto di questo file: i verbi che
+ * toccano alias che l'utente ha già valgono solo per il primo caso.
+ */
+function fromOurOwnUi(sender) {
+  return !sender?.tab
+}
+
+/**
  * Il content script gira dentro la pagina di un sito qualunque, quindi tutto
  * quello che arriva da lì è dato non fidato. Nessun messaggio può leggere il
  * token, scegliere l'istanza a cui parlare o passare un percorso arbitrario:
  * i verbi sono questi e basta, e i parametri sono controllati.
  */
 const handlers = {
-  async CREATE_ALIAS({ site }) {
-    return createAlias({ site: typeof site === 'string' ? site.slice(0, 253) : '' })
+  async CREATE_ALIAS({ site, fresh }) {
+    return createAlias({
+      site: typeof site === 'string' ? site.slice(0, 253) : '',
+      fresh: fresh === true,
+    })
   },
 
   async ALIASES_FOR_SITE({ site }) {
@@ -230,8 +309,19 @@ const handlers = {
   },
 
   async SIGN_OUT() {
+    // Prima il server, poi il disco. Se la revoca non riesce (rete assente,
+    // token già scaduto) si esce lo stesso: lasciare l'utente dentro perché la
+    // rete non risponde sarebbe peggio che avere un token orfano, e quel token
+    // scade comunque da solo.
+    try {
+      await (await client()).revokeSelf()
+    } catch {
+      /* si esce comunque */
+    }
+
     await clearToken()
     await forgetSecret(api)
+    await undoStore().remove([SESSION_ALIAS_KEY, UNDOABLE_KEY])
     // Con l'accesso va via anche l'icona nelle pagine: lasciarla attiva
     // significherebbe continuare a leggere ogni pagina per un'estensione che
     // non può più fare niente.
@@ -243,24 +333,64 @@ const handlers = {
     return setSettings(patch)
   },
 
+  /**
+   * Gli alias più recenti, per il popup aperto senza un sito davanti.
+   *
+   * Solo dal popup. Un content script che potesse chiedere questo elenco
+   * darebbe a qualunque sito, tramite un difetto nostro, un pezzo della mappa
+   * dei servizi a cui l'utente è iscritto.
+   */
+  async RECENT_ALIASES(_message, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+    const skudo = await client()
+    const aliases = await skudo.recentAliases()
+    return aliases.map(describeAlias)
+  },
+
+  /** Ricerca fra i propri alias. Anche questa solo dal popup. */
+  async SEARCH_ALIASES({ query }, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+    const term = typeof query === 'string' ? query.trim().slice(0, 100) : ''
+    if (!term) return handlers.RECENT_ALIASES({}, sender)
+    const skudo = await client()
+    const aliases = await skudo.findAliasesForSite(term)
+    return aliases.map(describeAlias)
+  },
+
+  async SET_ALIAS_ACTIVE({ id, active }, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+    const skudo = await client()
+    await skudo.setAliasActive(id, active === true)
+    return { id, active: active === true }
+  },
+
   async DOMAIN_OPTIONS() {
     const skudo = await client()
     return skudo.getDomainOptions()
   },
 
-  async UPDATE_ALIAS({ id, description }) {
+  async UPDATE_ALIAS({ id, description }, sender) {
+    if (!fromOurOwnUi(sender) && !(await isUndoable(id))) {
+      throw new ApiError('That alias cannot be changed from here.', { code: 'FORBIDDEN' })
+    }
     const skudo = await client()
     await skudo.updateAlias(id, { description })
     return { id }
   },
 
-  async DELETE_ALIAS({ id }) {
-    // Solo quello appena creato, e solo per pochi minuti: vedi UNDOABLE_KEY.
-    if (!(await isUndoable(id))) {
+  async DELETE_ALIAS({ id }, sender) {
+    // Dal popup si cancella qualunque alias: è la nostra interfaccia, e
+    // l'utente ha l'elenco davanti. Da una pagina vale solo quello appena
+    // creato, e solo per pochi minuti: vedi UNDOABLE_KEY.
+    if (!fromOurOwnUi(sender) && !(await isUndoable(id))) {
       throw new ApiError('That alias can no longer be undone from here.', { code: 'FORBIDDEN' })
     }
     const skudo = await client()
     await skudo.deleteAlias(id)
+    // Disfatto vuol dire anche dimenticato: se restasse in memoria di
+    // sessione, il clic successivo su quel sito ripescherebbe un alias che
+    // sul server non esiste più.
+    await forgetSessionAlias(id)
     return { id }
   },
 }

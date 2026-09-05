@@ -239,16 +239,36 @@ export function createPanel() {
       body.appendChild(wrap)
     },
 
-    /** Alias creato e già scritto nel campo, con la possibilità di disfare. */
-    created({ email, onUndo, onDone }) {
+    /**
+     * Alias scritto nel campo.
+     *
+     * Due casi, e la differenza va detta. Appena creato: si può disfare.
+     * Ripescato da questa sessione perché al sito era già stato dato quello:
+     * disfare non ha senso (non è stato creato adesso, e potrebbe già essere
+     * stato inviato in un altro modulo della stessa pagina), e quello che
+     * serve è poterne chiedere un altro apposta.
+     */
+    created({ email, reused = false, onUndo, onDone, onFresh }) {
       clear()
-      line('title', 'Alias filled in')
-      line('sub', 'Mail sent here reaches your inbox. Nobody learns your real address.')
+      line('title', reused ? 'Same alias as before' : 'Alias filled in')
+      line(
+        'sub',
+        reused
+          ? 'This is the one you already gave this site. Reusing it keeps their view of you in one place.'
+          : 'Mail sent here reaches your inbox. Nobody learns your real address.'
+      )
       line('alias', email)
-      actions([
-        { label: 'Undo', kind: 'quiet', onClick: onUndo },
-        { label: 'Done', kind: 'primary', onClick: onDone },
-      ])
+      actions(
+        reused
+          ? [
+              { label: 'Make another', kind: 'quiet', onClick: onFresh },
+              { label: 'Done', kind: 'primary', onClick: onDone },
+            ]
+          : [
+              { label: 'Undo', kind: 'quiet', onClick: onUndo },
+              { label: 'Done', kind: 'primary', onClick: onDone },
+            ]
+      )
     },
 
     /** Alias già esistenti per questo sito, su un modulo di accesso. */

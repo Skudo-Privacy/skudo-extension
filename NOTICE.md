@@ -4,7 +4,7 @@ Questo progetto contiene lavoro derivato da tre estensioni libere. Nessuna delle
 tre licenze ci obbliga a pubblicare il nostro codice; tutte richiedono che
 l'avviso di copyright accompagni il pacchetto distribuito.
 
-## Firefox Relay — Mozilla Public License 2.0
+## Firefox Relay, Mozilla Public License 2.0
 
 <https://github.com/mozilla/fx-private-relay-add-on>
 
@@ -15,7 +15,7 @@ addestrato su un insieme di moduli reali etichettati a mano. Sono riportati alla
 cifra. La libreria Fathom non è inclusa: la somma pesata e la sigmoide sono
 riscritte, perché 2.739 righe di libreria per quattro segnali non si giustificano.
 
-## DuckDuckGo Autofill — Apache License 2.0
+## DuckDuckGo Autofill, Apache License 2.0
 
 <https://github.com/duckduckgo/duckduckgo-autofill>
 
@@ -26,7 +26,7 @@ configurazione di riconoscimento campi: caselle di ricerca, filtri, campi
 dominante, viene dal loro `FormAnalyzer.js`. Il codice è riscritto, i pesi sono
 nostri.
 
-## addy.io browser extension — MIT
+## addy.io browser extension, MIT
 
 <https://github.com/anonaddy/browser-extension>
 

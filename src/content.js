@@ -37,15 +37,36 @@ const IDLE_FRAMES_BEFORE_STOP = 20
 /** Sotto questo scarto non si tocca il DOM: su Mullvad le misure sono arrotondate. */
 const POSITION_EPSILON = 0.5
 
-/** Ogni quanti fotogrammi ricontrollare le icone altrui: cambiano di rado. */
-const SHIFT_RECHECK_FRAMES = 30
+/**
+ * Ogni quanto ricontrollare le icone altrui, in millisecondi.
+ *
+ * Era un conteggio di fotogrammi, ed era un difetto: il ciclo si spegne dopo
+ * IDLE_FRAMES_BEFORE_STOP fotogrammi immobili, cioè venti, e il ricontrollo era
+ * fissato a trenta. Su una pagina che si assesta subito il ciclo si fermava
+ * prima di arrivarci, e il ricontrollo non avveniva mai.
+ *
+ * Conta perché le altre estensioni iniettano la loro icona dopo di noi, spesso
+ * di parecchie centinaia di millisecondi: quando la loro compariva, noi avevamo
+ * già smesso di guardare. È questo il motivo per cui l'icona continuava a
+ * sovrapporsi nonostante lo spostamento funzionasse.
+ */
+const SHIFT_RECHECK_MS = 400
+
+/**
+ * Quando risvegliarsi apposta dopo aver agganciato un campo, in millisecondi.
+ *
+ * Copre la finestra in cui le altre estensioni si montano. Sono quattro
+ * risvegli in tre secondi e poi basta: non è un ciclo, e su una pagina ferma
+ * non lascia niente acceso.
+ */
+const SHIFT_WAKE_MS = [150, 500, 1200, 3000]
 
 /**
  * Nodi che non possono contenere un campo, e ARIA che dice "sono un comando".
  *
  * Servono a non rifare la scansione per niente. Su un'applicazione a componenti
- * il DOM cambia in continuazione — un menu che si apre, un contatore che si
- * aggiorna, un'animazione — e senza questo filtro ogni singola mutazione
+ * il DOM cambia in continuazione: un menu che si apre, un contatore che si
+ * aggiorna, un'animazione. Senza questo filtro ogni singola mutazione
  * accendeva una scansione dell'intera pagina. Il filtro è la stessa idea che
  * Proton Pass usa nel proprio osservatore.
  */
@@ -94,7 +115,6 @@ const tracked = new Map()
 
 let rafId = null
 let idleFrames = 0
-let frame = 0
 let rescanHandle = null
 
 /** Un pannello alla volta: due aperti insieme sono due decisioni in conflitto. */
@@ -111,7 +131,6 @@ function schedule() {
 }
 
 function tick() {
-  frame++
   let moved = false
 
   for (const [input, entry] of tracked) {
@@ -150,9 +169,16 @@ function place(entry) {
   // Le icone altrui compaiono quando vogliono, spesso dopo di noi. Si
   // ricontrolla ogni tanto, non a ogni fotogramma: costa una lettura di
   // layout.
-  if (frame - entry.shiftCheckedAt > SHIFT_RECHECK_FRAMES) {
-    entry.shiftCheckedAt = frame
-    entry.shift = foreignShift(entry.icon.host, rect)
+  const now = performance.now()
+  if (now - entry.shiftCheckedAt > SHIFT_RECHECK_MS) {
+    entry.shiftCheckedAt = now
+    const shift = foreignShift(entry.icon.host, rect, entry.input)
+    // Uno spostamento che cambia è movimento: il ciclo non deve spegnersi
+    // proprio mentre l'icona si sta togliendo di mezzo.
+    if (Math.abs(shift - entry.shift) >= POSITION_EPSILON) {
+      entry.shift = shift
+      entry.moved = true
+    }
   }
 
   const { left, top } = iconPosition(rect, entry.shift)
@@ -167,7 +193,9 @@ function place(entry) {
 
   if (entry.panel) entry.panel.move(panelPosition(rect))
 
-  return !settled
+  const moved = !settled || entry.moved
+  entry.moved = false
+  return moved
 }
 
 /* ------------------------------------------------------------------ *
@@ -192,6 +220,7 @@ function attach(field) {
     top: NaN,
     shift: 0,
     shiftCheckedAt: -Infinity,
+    moved: false,
     busy: false,
   }
 
@@ -203,6 +232,16 @@ function attach(field) {
   document.body.appendChild(entry.icon.host)
   tracked.set(input, entry)
   schedule()
+
+  // Le altre estensioni arrivano dopo. Si torna a guardare qualche volta,
+  // scadenzato, invece di tenere acceso un ciclo per tre secondi.
+  for (const delay of SHIFT_WAKE_MS) {
+    setTimeout(() => {
+      if (!tracked.has(input)) return
+      entry.shiftCheckedAt = -Infinity
+      schedule()
+    }, delay)
+  }
 }
 
 function detach(input) {
@@ -278,7 +317,7 @@ async function send(type, payload = {}) {
 
 const site = () => location.hostname.replace(/^www\./, '')
 
-async function activate(entry) {
+async function activate(entry, { fresh = false } = {}) {
   if (entry.busy) return
 
   // Secondo clic sul pannello aperto: si chiude, non si ricomincia.
@@ -295,7 +334,7 @@ async function activate(entry) {
   const response =
     entry.field.action === 'reuse'
       ? await send('ALIASES_FOR_SITE', { site: site() })
-      : await send('CREATE_ALIAS', { site: site() })
+      : await send('CREATE_ALIAS', { site: site(), fresh })
 
   entry.busy = false
   entry.icon.setBusy(false)
@@ -329,7 +368,14 @@ async function activate(entry) {
 
   panel.created({
     email: alias.email,
+    reused: alias.reused === true,
     onDone: () => closePanelFor(entry),
+    // Un alias diverso per questo sito si ha solo chiedendolo: `fresh` passa
+    // sopra alla memoria di sessione, e non lo fa nessun altro percorso.
+    onFresh: () => {
+      closePanelFor(entry)
+      activate(entry, { fresh: true })
+    },
     onUndo: () => {
       // Disfare vuol dire davvero disfare: il campo torna vuoto e l'alias
       // sparisce dall'elenco. Lasciarlo in giro riempirebbe l'account di

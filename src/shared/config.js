@@ -6,7 +6,7 @@
  * Lo era, ed era un errore. Un campo "Server" nella schermata di collegamento
  * sembra un servizio all'utente e invece è tre cose insieme: un modo per
  * sbagliare a digitare, una domanda a cui il novantanove per cento delle
- * persone non sa rispondere, e — la parte che conta — un posto dove chiunque
+ * persone non sa rispondere, e soprattutto un posto dove chiunque
  * riesca a farsi scrivere un indirizzo diverso dirotta l'intero collegamento
  * verso un server suo.
  *

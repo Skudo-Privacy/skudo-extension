@@ -19,7 +19,7 @@
  * Terzo caso, che ci mancava e che avevamo sbagliato: la pagina "password
  * dimenticata". Ha un campo email, non ha password, e con i soli segnali di
  * prima veniva letta come "nessuna password, quindi probabilmente
- * un'iscrizione" — cioè proponevamo un alias **nuovo** a chi sta cercando di
+ * un'iscrizione", cioè proponevamo un alias **nuovo** a chi sta cercando di
  * rientrare in un account che ha già. Un indirizzo mai visto su quel modulo non
  * riceve nessuna email di recupero, e l'utente resta fuori senza capire perché.
  *

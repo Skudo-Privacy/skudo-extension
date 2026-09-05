@@ -11,7 +11,7 @@ import { api } from './shared/browser.js'
  * Attesa minima prima di mostrare il risultato della creazione.
  *
  * Non è un ritardo finto per far sembrare che stia lavorando: la chiamata vera
- * di solito ci mette meno, e senza questa il popup sfarfalla — la rotella
+ * di solito ci mette meno, e senza questa il popup sfarfalla: la rotella
  * appare e sparisce nello stesso fotogramma, e l'utente non capisce se ha
  * premuto. Sotto i duecento millisecondi un cambiamento di stato si legge come
  * un errore grafico, non come una risposta.
@@ -24,7 +24,7 @@ const $ = (id) => document.getElementById(id)
  * L'icona di copia per l'elenco costruito da qui, presa dal markup invece che
  * riscritta: è la stessa azione della scheda della bozza e deve essere lo
  * stesso disegno. Si clona il nodo che già esiste, così non c'è una seconda
- * copia da tenere allineata, e non serve `innerHTML` — che funzionerebbe, ma è
+ * copia da tenere allineata, e non serve `innerHTML`, che funzionerebbe ma è
  * la prima cosa che un revisore degli store va a cercare.
  */
 function copyIcon() {
@@ -105,7 +105,7 @@ async function commitDraft() {
       await send('UPDATE_ALIAS', { id: draft.id, description })
     }
     closeDraft()
-    await loadExisting()
+    await loadList()
   } catch (error) {
     showError('create-error', error.message)
   }
@@ -149,48 +149,255 @@ async function create() {
     if (error.code === 'UNAUTHENTICATED') show('signin')
   } finally {
     button.disabled = false
-    label.textContent = 'Create alias'
+    label.textContent = site ? 'Create alias' : 'Create an alias to copy'
     spinner.hidden = true
   }
 }
 
 /* ------------------------------------------------------------------ *
- * Alias già esistenti per il sito
+ * Elenco degli alias
+ *
+ * Un solo componente per due casi. Con un sito davanti mostra gli alias di
+ * quel sito; senza, gli ultimi creati, che è la ragione per cui questo popup
+ * viene aperto quando non si sta compilando niente: ritrovare l'indirizzo dato
+ * a qualcuno.
+ *
+ * L'elenco non è mai completo, ed è voluto. Il server tiene un token
+ * dell'estensione a venti righe per richiesta, perché l'elenco intero degli
+ * alias è la mappa di ogni servizio a cui una persona è iscritta: se un token
+ * viene rubato, quella mappa non deve venire via in una richiesta sola. Per
+ * vedere tutto c'è l'applicazione.
  * ------------------------------------------------------------------ */
 
-async function loadExisting() {
-  if (!site) return
+const SEARCH_DEBOUNCE_MS = 250
+
+let searchTimer = null
+
+/** L'ultima richiesta vinta. Vedi la guardia contro le risposte in ritardo. */
+let listRequest = 0
+
+/** Le icone del markup, clonate invece che riscritte. Vedi copyIcon(). */
+function trashIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('width', '17')
+  svg.setAttribute('height', '17')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.8')
+  svg.setAttribute('stroke-linecap', 'round')
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', 'M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7m-7 0 .7 11a2 2 0 0 0 2 1.9h4.6a2 2 0 0 0 2-1.9L17 7')
+  svg.appendChild(path)
+  return svg
+}
+
+function iconButton(label, node, onClick) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'icon-button'
+  button.setAttribute('aria-label', label)
+  button.title = label
+  button.appendChild(node)
+  button.addEventListener('click', onClick)
+  return button
+}
+
+/**
+ * Una riga.
+ *
+ * Tre azioni e nessun menu: copiare, accendere o spegnere, cancellare. La
+ * nota si modifica cliccandola. Non c'è niente che riguardi l'indirizzo di
+ * inoltro, e non è una dimenticanza: il token dell'estensione non può nemmeno
+ * chiederlo al server, quindi non c'è niente da mostrare qui.
+ */
+function aliasRow(alias, { onChanged }) {
+  const item = document.createElement('li')
+  item.className = 'row-alias'
+  if (!alias.active) item.classList.add('is-off')
+
+  const top = document.createElement('div')
+  top.className = 'row-alias__top'
+
+  const dot = document.createElement('span')
+  dot.className = 'dot'
+  dot.setAttribute('aria-hidden', 'true')
+  top.appendChild(dot)
+
+  const code = document.createElement('code')
+  code.textContent = alias.email
+  top.appendChild(code)
+
+  top.appendChild(
+    iconButton(`Copy ${alias.email}`, copyIcon(), () => navigator.clipboard.writeText(alias.email))
+  )
+
+  top.appendChild(
+    iconButton(alias.active ? 'Turn off' : 'Turn on', powerIcon(), async () => {
+      try {
+        await send('SET_ALIAS_ACTIVE', { id: alias.id, active: !alias.active })
+        alias.active = !alias.active
+        item.classList.toggle('is-off', !alias.active)
+        onChanged()
+      } catch (error) {
+        showError('create-error', error.message)
+      }
+    })
+  )
+
+  top.appendChild(iconButton('Delete', trashIcon(), () => askToDelete()))
+
+  item.appendChild(top)
+
+  /* Nota: testo finché non lo si clicca, campo mentre lo si scrive. */
+  const note = document.createElement('button')
+  note.type = 'button'
+  note.className = 'row-alias__note'
+  note.textContent = alias.description || 'Add a note'
+  note.addEventListener('click', () => {
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'row-alias__note-input'
+    input.maxLength = 200
+    input.value = alias.description || ''
+
+    const save = async () => {
+      const description = input.value.trim()
+      input.replaceWith(note)
+      if (description === (alias.description || '')) return
+      try {
+        await send('UPDATE_ALIAS', { id: alias.id, description })
+        alias.description = description
+        note.textContent = description || 'Add a note'
+      } catch (error) {
+        showError('create-error', error.message)
+      }
+    }
+
+    input.addEventListener('blur', save)
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') input.blur()
+      if (event.key === 'Escape') input.replaceWith(note)
+    })
+
+    note.replaceWith(input)
+    input.focus()
+    input.select()
+  })
+  item.appendChild(note)
+
+  /**
+   * La conferma sta dentro la riga.
+   *
+   * `confirm()` bloccherebbe il popup, e su alcuni motori lo chiude del tutto:
+   * la conferma sparirebbe insieme alla finestra, e l'alias resterebbe.
+   */
+  function askToDelete() {
+    if (item.querySelector('.row-alias__confirm')) return
+
+    const bar = document.createElement('div')
+    bar.className = 'row-alias__confirm'
+
+    const label = document.createElement('span')
+    label.textContent = 'Delete this alias?'
+    bar.appendChild(label)
+
+    const cancel = document.createElement('button')
+    cancel.type = 'button'
+    cancel.className = 'mini'
+    cancel.textContent = 'Keep'
+    cancel.addEventListener('click', () => bar.remove())
+    bar.appendChild(cancel)
+
+    const confirm = document.createElement('button')
+    confirm.type = 'button'
+    confirm.className = 'mini mini--danger'
+    confirm.textContent = 'Delete'
+    confirm.addEventListener('click', async () => {
+      confirm.disabled = true
+      try {
+        await send('DELETE_ALIAS', { id: alias.id })
+        item.remove()
+        onChanged()
+      } catch (error) {
+        bar.remove()
+        showError('create-error', error.message)
+      }
+    })
+    bar.appendChild(confirm)
+
+    item.appendChild(bar)
+  }
+
+  return item
+}
+
+function powerIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('width', '17')
+  svg.setAttribute('height', '17')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.8')
+  svg.setAttribute('stroke-linecap', 'round')
+  const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  arc.setAttribute('d', 'M7.5 6.7a6.5 6.5 0 1 0 9 0')
+  const stem = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  stem.setAttribute('d', 'M12 3.5v7')
+  svg.append(arc, stem)
+  return svg
+}
+
+/**
+ * Riempie l'elenco.
+ *
+ * La guardia sul numero di richiesta è la stessa che serviva alla ricerca
+ * globale dell'applicazione: una risposta lenta per una parola corta può
+ * arrivare dopo quella di una parola più lunga scritta subito dopo, e
+ * sovrascrivere il risultato giusto con quello vecchio.
+ */
+async function loadList() {
+  const query = $('search').value.trim()
+  const heading = $('list-heading')
+  const list = $('alias-list')
+
+  const thisRequest = ++listRequest
+
   let aliases = []
   try {
-    aliases = await send('ALIASES_FOR_SITE', { site })
-  } catch {
-    // Un elenco che non arriva non è un errore da mostrare: la creazione
+    if (query) {
+      heading.textContent = 'Results'
+      aliases = await send('SEARCH_ALIASES', { query })
+    } else if (site) {
+      heading.textContent = 'Already on this site'
+      aliases = await send('ALIASES_FOR_SITE', { site })
+    } else {
+      heading.textContent = 'Recent aliases'
+      aliases = await send('RECENT_ALIASES')
+    }
+  } catch (error) {
+    if (thisRequest !== listRequest) return
+    if (error.code === 'UNAUTHENTICATED') return show('signin')
+    // Un elenco che non arriva non è un errore da sbattere in faccia: creare
     // funziona lo stesso, e il popup ha già un messaggio suo per i guasti veri.
-    return
+    aliases = []
   }
 
-  const list = $('existing-list')
+  if (thisRequest !== listRequest) return
+
   list.textContent = ''
-
   for (const alias of aliases) {
-    const item = document.createElement('li')
-
-    const code = document.createElement('code')
-    code.textContent = alias.email
-    item.appendChild(code)
-
-    const copy = document.createElement('button')
-    copy.type = 'button'
-    copy.className = 'icon-button'
-    copy.appendChild(copyIcon())
-    copy.setAttribute('aria-label', `Copy ${alias.email}`)
-    copy.addEventListener('click', () => navigator.clipboard.writeText(alias.email))
-    item.appendChild(copy)
-
-    list.appendChild(item)
+    list.appendChild(aliasRow(alias, { onChanged: () => {} }))
   }
 
-  $('existing').hidden = aliases.length === 0
+  $('list-empty').hidden = aliases.length > 0
+  $('list-empty').textContent = query
+    ? `Nothing matching "${query}".`
+    : site
+      ? 'No alias for this site yet.'
+      : 'Nothing here yet.'
+  $('list-note').hidden = aliases.length < 20
 }
 
 /* ------------------------------------------------------------------ *
@@ -279,10 +486,19 @@ async function init() {
   }
 
   site = await currentSite()
-  $('site').textContent = site || 'No site open'
+
+  // Senza un sito davanti il popup non è mutilato: cambia mestiere. Diventa
+  // l'elenco dei propri alias, che è quello che serve quando lo si apre da una
+  // scheda vuota. Il bottone resta, perché creare un alias da copiare a mano è
+  // esattamente quello che si fa quando l'indirizzo va scritto altrove.
+  $('site').textContent = site || 'Your aliases'
+  $('create').querySelector('.button__label').textContent = site
+    ? 'Create alias'
+    : 'Create an alias to copy'
+
   show('main')
 
-  loadExisting()
+  loadList()
   loadDomains(state.domain)
 }
 
@@ -316,6 +532,11 @@ $('draft-done').addEventListener('click', commitDraft)
 $('draft-discard').addEventListener('click', discardDraft)
 $('copy').addEventListener('click', () => {
   if (draft) navigator.clipboard.writeText(draft.email)
+})
+
+$('search').addEventListener('input', () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(loadList, SEARCH_DEBOUNCE_MS)
 })
 
 $('opt-inject').addEventListener('change', onInjectToggle)
