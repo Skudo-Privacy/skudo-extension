@@ -78,8 +78,16 @@ npm install
 npm test          # 87 prove
 npm run build     # produce dist/
 npm run dev       # ricostruisce a ogni salvataggio
+npm run lint      # il controllo di Mozilla, quello della revisione AMO
+npm run firefox   # apre Firefox con l'estensione gia' caricata
+npm run pack      # produce lo zip da caricare a mano
 npm run format
 ```
+
+`npm run lint` e' quello che conta prima di ogni rilascio: e' lo stesso
+controllo che gira in revisione su addons.mozilla.org, e trova cose che nessun
+test unitario puo' trovare. Ha gia' pescato un difetto vero, vedi
+[docs/BROWSERS.md](docs/BROWSERS.md) alla voce "Versione minima".
 
 Per caricarla in un browser: vedi [docs/BROWSERS.md](docs/BROWSERS.md).
 

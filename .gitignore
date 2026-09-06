@@ -4,3 +4,7 @@ dist-zip/
 *.log
 .DS_Store
 dist-local/
+
+# Pacchetti prodotti da web-ext
+/*.zip
+/*.xpi

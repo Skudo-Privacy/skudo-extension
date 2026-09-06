@@ -127,9 +127,24 @@ describe('compatibilità del manifest', () => {
     expect(manifest.background.type).toBeUndefined()
   })
 
-  it('resta installabile sulla ESR su cui girano Mullvad e LibreWolf', () => {
-    expect(manifest.browser_specific_settings.gecko.strict_min_version).toBe('115.0')
+  it('non dichiara una versione minima in cui non funzionerebbe', () => {
+    // `optional_host_permissions` esiste da Firefox 128. Dichiarare 115, come
+    // facevamo, non rendeva l'estensione compatibile con la 115: la rendeva
+    // installabile dove il permesso di leggere le pagine non si può nemmeno
+    // chiedere, e l'interruttore sarebbe tornato indietro da solo senza un
+    // errore da nessuna parte. Trovato da `web-ext lint`.
+    const min = Number(manifest.browser_specific_settings.gecko.strict_min_version.split('.')[0])
+    expect(min).toBeGreaterThanOrEqual(128)
     expect(manifest.browser_specific_settings.gecko.id).toBe('extension@skudo.org')
+  })
+
+  it('dichiara di non raccogliere niente', () => {
+    // Firefox chiede a ogni estensione di dire cosa raccoglie. Per noi la
+    // risposta è "niente", e va scritta: un prodotto che vende il fatto di non
+    // sapere niente dei propri utenti non lascia il campo in bianco.
+    expect(manifest.browser_specific_settings.gecko.data_collection_permissions).toEqual({
+      required: ['none'],
+    })
   })
 
   it('i verbi che leggono gli alias non sono raggiungibili da una pagina', () => {
