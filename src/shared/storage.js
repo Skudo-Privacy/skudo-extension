@@ -46,6 +46,17 @@ const DEFAULTS = {
    * Vedi docs/BROWSERS.md.
    */
   theme: 'auto',
+  /**
+   * I siti su cui l'utente ha detto di non suggerire niente.
+   *
+   * Un'estensione che compare dove non serve e non si puo' zittire diventa
+   * quella che si disinstalla. Il content script legge questa lista all'avvio
+   * e, se il sito c'e', non aggancia niente: nessuna icona, nessuna scansione,
+   * nessun osservatore delle mutazioni.
+   *
+   * @type {string[]}
+   */
+  pausedSites: [],
 }
 
 export async function getSettings() {

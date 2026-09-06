@@ -1,5 +1,5 @@
 /**
- * Content script: l'icona nei campi email.
+ * Content script: l'icona nei campi email, e il menu che ne esce.
  *
  * Gira su ogni pagina che l'utente apre, quindi ogni scelta qui si paga
  * moltiplicata per tutto il web.
@@ -15,19 +15,20 @@
  *
  * addy.io e SimpleLogin tengono un `setInterval(..., 200)` per ogni campo,
  * acceso per sempre: dieci campi fanno cinquanta risvegli al secondo su una
- * pagina ferma. Qui c'è un solo ciclo `requestAnimationFrame` condiviso, che
- * parte quando qualcosa può aver spostato le icone e si ferma da solo quando le
- * posizioni smettono di cambiare. A pagina ferma il costo è zero.
+ * pagina ferma. Qui c'e' un solo ciclo `requestAnimationFrame` condiviso, che
+ * parte quando qualcosa puo' aver spostato le icone e si ferma da solo quando le
+ * posizioni smettono di cambiare. A pagina ferma il costo e' zero.
  *
- * ## Niente sovrapposizioni, e niente clic muti
+ * ## Un menu di righe, e poi un messaggio
  *
- * Chi ha anche Bitwarden o Proton Pass ha già un'icona in quell'angolo del
- * campo. Ci si sposta: vedi content/anchor.js. E ogni clic porta da qualche
- * parte, anche quando l'account non è ancora collegato: vedi content/ui.js.
+ * Premere l'icona apre un elenco di righe, non una scheda: vedi il commento in
+ * content/ui.js sul perche'. Riempito il campo il menu ha finito e si chiude;
+ * quello che resta da dire e' una riga in basso con l'indirizzo e "Undo", che
+ * se ne va da sola.
  */
 
-import { foreignShift, iconPosition, panelPosition } from './content/anchor.js'
-import { createIcon, createPanel, setTheme } from './content/ui.js'
+import { createIcon, createMenu, createToast, setTheme } from './content/ui.js'
+import { foreignShift, iconPosition, iconSize, menuPosition } from './content/anchor.js'
 import { findEmailFields } from './detector/index.js'
 import { api } from './shared/browser.js'
 
@@ -41,14 +42,13 @@ const POSITION_EPSILON = 0.5
  * Ogni quanto ricontrollare le icone altrui, in millisecondi.
  *
  * Era un conteggio di fotogrammi, ed era un difetto: il ciclo si spegne dopo
- * IDLE_FRAMES_BEFORE_STOP fotogrammi immobili, cioè venti, e il ricontrollo era
+ * IDLE_FRAMES_BEFORE_STOP fotogrammi immobili, cioe' venti, e il ricontrollo era
  * fissato a trenta. Su una pagina che si assesta subito il ciclo si fermava
  * prima di arrivarci, e il ricontrollo non avveniva mai.
  *
- * Conta perché le altre estensioni iniettano la loro icona dopo di noi, spesso
+ * Conta perche' le altre estensioni iniettano la loro icona dopo di noi, spesso
  * di parecchie centinaia di millisecondi: quando la loro compariva, noi avevamo
- * già smesso di guardare. È questo il motivo per cui l'icona continuava a
- * sovrapporsi nonostante lo spostamento funzionasse.
+ * gia' smesso di guardare.
  */
 const SHIFT_RECHECK_MS = 400
 
@@ -56,10 +56,13 @@ const SHIFT_RECHECK_MS = 400
  * Quando risvegliarsi apposta dopo aver agganciato un campo, in millisecondi.
  *
  * Copre la finestra in cui le altre estensioni si montano. Sono quattro
- * risvegli in tre secondi e poi basta: non è un ciclo, e su una pagina ferma
+ * risvegli in tre secondi e poi basta: non e' un ciclo, e su una pagina ferma
  * non lascia niente acceso.
  */
 const SHIFT_WAKE_MS = [150, 500, 1200, 3000]
+
+/** Quanto resta a schermo il messaggio dopo il riempimento. */
+const TOAST_LIFE_MS = 7000
 
 /**
  * Nodi che non possono contenere un campo, e ARIA che dice "sono un comando".
@@ -67,8 +70,7 @@ const SHIFT_WAKE_MS = [150, 500, 1200, 3000]
  * Servono a non rifare la scansione per niente. Su un'applicazione a componenti
  * il DOM cambia in continuazione: un menu che si apre, un contatore che si
  * aggiorna, un'animazione. Senza questo filtro ogni singola mutazione
- * accendeva una scansione dell'intera pagina. Il filtro è la stessa idea che
- * Proton Pass usa nel proprio osservatore.
+ * accendeva una scansione dell'intera pagina.
  */
 const BARREN_TAGS = new Set([
   'SCRIPT',
@@ -117,8 +119,15 @@ let rafId = null
 let idleFrames = 0
 let rescanHandle = null
 
-/** Un pannello alla volta: due aperti insieme sono due decisioni in conflitto. */
-let openPanel = null
+/** Un menu alla volta: due aperti insieme sono due decisioni in conflitto. */
+let openMenu = null
+
+/** Un messaggio alla volta, e il timer che lo spegne. */
+let toast = null
+let toastTimer = null
+
+/** Il dominio del sito, senza `www`. */
+const site = () => location.hostname.replace(/^www\./, '')
 
 /* ------------------------------------------------------------------ *
  * Ciclo di posizionamento, uno per tutti
@@ -159,21 +168,19 @@ function place(entry) {
   if (rect.width === 0 || rect.height === 0) {
     if (entry.icon.host.style.visibility !== 'hidden') {
       entry.icon.host.style.visibility = 'hidden'
-      closePanelFor(entry)
+      closeMenuFor(entry)
       return true
     }
     return false
   }
   entry.icon.host.style.visibility = ''
+  entry.icon.setSize(iconSize(rect))
 
-  // Le icone altrui compaiono quando vogliono, spesso dopo di noi. Si
-  // ricontrolla ogni tanto, non a ogni fotogramma: costa una lettura di
-  // layout.
   const now = performance.now()
   if (now - entry.shiftCheckedAt > SHIFT_RECHECK_MS) {
     entry.shiftCheckedAt = now
     const shift = foreignShift(entry.icon.host, rect, entry.input)
-    // Uno spostamento che cambia è movimento: il ciclo non deve spegnersi
+    // Uno spostamento che cambia e' movimento: il ciclo non deve spegnersi
     // proprio mentre l'icona si sta togliendo di mezzo.
     if (Math.abs(shift - entry.shift) >= POSITION_EPSILON) {
       entry.shift = shift
@@ -192,14 +199,15 @@ function place(entry) {
   }
 
   // Si mostra solo dopo il primo controllo delle icone altrui. Prima di
-  // allora la posizione è una supposizione, e mostrarla vuol dire farla
+  // allora la posizione e' una supposizione, e mostrarla vuol dire farla
   // saltare di venti pixel sotto gli occhi di chi sta leggendo la pagina.
   if (!entry.revealed && entry.shiftCheckedAt > 0) {
     entry.revealed = true
     entry.icon.setReady()
   }
 
-  if (entry.panel) entry.panel.move(panelPosition(rect))
+  if (entry.menu) entry.menu.move(menuPosition(rect))
+  if (toast && toast.anchor === entry) toast.ui.move(menuPosition(rect))
 
   const moved = !settled || entry.moved
   entry.moved = false
@@ -213,7 +221,7 @@ function place(entry) {
 function titleFor(field) {
   return field.action === 'reuse'
     ? 'Skudo: use an alias you already have here'
-    : 'Skudo: make an alias for this site'
+    : 'Skudo: hide your email address'
 }
 
 function attach(field) {
@@ -223,7 +231,7 @@ function attach(field) {
   const entry = {
     input,
     field,
-    panel: null,
+    menu: null,
     left: NaN,
     top: NaN,
     shift: 0,
@@ -256,50 +264,97 @@ function attach(field) {
 function detach(input) {
   const entry = tracked.get(input)
   if (!entry) return
-  closePanelFor(entry)
+  closeMenuFor(entry)
   entry.icon.remove()
   tracked.delete(input)
 }
 
+/** Spegne tutto: usato quando l'utente zittisce l'estensione su questo sito. */
+function detachAll() {
+  for (const input of [...tracked.keys()]) detach(input)
+  clearToast()
+}
+
 /* ------------------------------------------------------------------ *
- * Pannello
+ * Menu
  * ------------------------------------------------------------------ */
 
-function closePanelFor(entry) {
-  if (!entry?.panel) return
-  entry.panel.remove()
-  entry.panel = null
-  if (openPanel === entry) openPanel = null
+function closeMenuFor(entry) {
+  if (!entry?.menu) return
+  entry.menu.remove()
+  entry.menu = null
+  if (openMenu === entry) openMenu = null
 }
 
-function panelFor(entry) {
-  if (openPanel && openPanel !== entry) closePanelFor(openPanel)
+function menuFor(entry) {
+  if (openMenu && openMenu !== entry) closeMenuFor(openMenu)
 
-  if (!entry.panel) {
-    entry.panel = createPanel({ site: site() })
-    document.body.appendChild(entry.panel.host)
-    entry.panel.move(panelPosition(entry.input.getBoundingClientRect()))
-    openPanel = entry
+  if (!entry.menu) {
+    entry.menu = createMenu({
+      onPause: async () => {
+        closeMenuFor(entry)
+        await send('PAUSE_SITE', { site: site() })
+        detachAll()
+      },
+    })
+    document.body.appendChild(entry.menu.host)
+    entry.menu.move(menuPosition(entry.input.getBoundingClientRect()))
+    openMenu = entry
   }
-  return entry.panel
+  return entry.menu
 }
 
-// Un clic fuori chiude il pannello. In cattura, perché molte pagine fermano gli
+// Un clic fuori chiude il menu. In cattura, perche' molte pagine fermano gli
 // eventi prima che risalgano.
 document.addEventListener(
   'pointerdown',
   (event) => {
-    if (!openPanel) return
+    if (!openMenu) return
     const path = event.composedPath?.() || []
-    if (path.includes(openPanel.panel?.host) || path.includes(openPanel.icon.host)) return
-    closePanelFor(openPanel)
+    if (path.includes(openMenu.menu?.host) || path.includes(openMenu.icon.host)) return
+    closeMenuFor(openMenu)
   },
   true
 )
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && openPanel) closePanelFor(openPanel)
+  if (event.key === 'Escape' && openMenu) closeMenuFor(openMenu)
 })
+
+/* ------------------------------------------------------------------ *
+ * Il messaggio dopo il riempimento
+ * ------------------------------------------------------------------ */
+
+function clearToast() {
+  clearTimeout(toastTimer)
+  toastTimer = null
+  toast?.ui.remove()
+  toast = null
+}
+
+function showToast(entry, alias) {
+  clearToast()
+
+  const ui = createToast({
+    email: alias.email,
+    life: TOAST_LIFE_MS,
+    onUndo: () => {
+      // Disfare vuol dire davvero disfare: il campo torna vuoto e l'alias
+      // sparisce dall'elenco. Lasciarlo in giro riempirebbe l'account di
+      // indirizzi mai usati, che e' la lamentela numero uno su questi
+      // strumenti.
+      setValue(entry.input, '')
+      clearToast()
+      send('DELETE_ALIAS', { id: alias.id })
+    },
+  })
+
+  document.body.appendChild(ui.host)
+  ui.move(menuPosition(entry.input.getBoundingClientRect()))
+  toast = { ui, anchor: entry }
+  toastTimer = setTimeout(clearToast, TOAST_LIFE_MS)
+  schedule()
+}
 
 /* ------------------------------------------------------------------ *
  * Azione
@@ -318,105 +373,169 @@ async function send(type, payload = {}) {
   try {
     return await api.runtime.sendMessage({ type, ...payload })
   } catch {
-    // L'estensione è stata aggiornata o disattivata mentre la pagina era
-    // aperta: il canale non esiste più.
+    // L'estensione e' stata aggiornata o disattivata mentre la pagina era
+    // aperta: il canale non esiste piu'.
     return { ok: false, error: 'Skudo was reloaded. Refresh this page and try again.' }
   }
 }
 
-const site = () => location.hostname.replace(/^www\./, '')
-
-async function activate(entry, { fresh = false } = {}) {
-  if (entry.busy) return
-
-  // Secondo clic sul pannello aperto: si chiude, non si ricomincia.
-  if (entry.panel) {
-    closePanelFor(entry)
-    return
-  }
-
-  entry.busy = true
-  entry.icon.setBusy(true)
-  const panel = panelFor(entry)
-  panel.working(entry.field.action === 'reuse' ? 'Looking for your alias…' : 'Making an alias…')
-
-  const response =
-    entry.field.action === 'reuse'
-      ? await send('ALIASES_FOR_SITE', { site: site() })
-      : await send('CREATE_ALIAS', { site: site(), fresh })
-
-  entry.busy = false
-  entry.icon.setBusy(false)
-
-  if (!response?.ok) return showFailure(entry, response)
-
-  if (entry.field.action === 'reuse') {
-    const aliases = response.data
-    if (!aliases.length) {
-      // Non ne ha uno per questo sito: proporre il riuso sarebbe una
-      // promessa a vuoto, quindi si offre di crearne uno.
-      entry.field = { ...entry.field, action: 'create' }
-      entry.icon.setTitle(titleFor(entry.field))
-      closePanelFor(entry)
-      return activate(entry)
-    }
-
-    panel.choose({
-      aliases,
-      onPick: (alias) => {
-        setValue(entry.input, alias.email)
-        closePanelFor(entry)
-      },
-      onDismiss: () => closePanelFor(entry),
-    })
-    return
-  }
-
-  const alias = response.data
+/** Riempie il campo, chiude il menu, e lascia il messaggio con "Undo". */
+function completeWith(entry, alias) {
   setValue(entry.input, alias.email)
-
-  panel.created({
-    email: alias.email,
-    reused: alias.reused === true,
-    onDone: () => closePanelFor(entry),
-    // Un alias diverso per questo sito si ha solo chiedendolo: `fresh` passa
-    // sopra alla memoria di sessione, e non lo fa nessun altro percorso.
-    onFresh: () => {
-      closePanelFor(entry)
-      activate(entry, { fresh: true })
-    },
-    onUndo: () => {
-      // Disfare vuol dire davvero disfare: il campo torna vuoto e l'alias
-      // sparisce dall'elenco. Lasciarlo in giro riempirebbe l'account di
-      // indirizzi mai usati, che è la lamentela numero uno su questi
-      // strumenti.
-      setValue(entry.input, '')
-      closePanelFor(entry)
-      send('DELETE_ALIAS', { id: alias.id })
-    },
-  })
+  closeMenuFor(entry)
+  if (alias.reused) clearToast()
+  else showToast(entry, alias)
 }
 
-function showFailure(entry, response) {
-  const panel = panelFor(entry)
-
-  if (response?.code === 'UNAUTHENTICATED') {
-    // Era il bug peggiore della versione precedente: senza account collegato
-    // il clic non faceva niente di visibile, e sembrava rotta.
-    panel.signedOut({
-      onConnect: () => {
-        send('OPEN_CONNECT')
-        closePanelFor(entry)
-      },
-      onDismiss: () => closePanelFor(entry),
-    })
+/**
+ * Apre il menu.
+ *
+ * Ogni stato e' un titolo e un elenco di righe. Il caricamento e l'errore non
+ * sono schermate: sono il sottotitolo della riga che si e' premuta, sostituito
+ * al suo posto, cosi' il menu non salta sotto il puntatore.
+ */
+async function activate(entry) {
+  // Secondo clic sul menu aperto: si chiude, non si ricomincia.
+  if (entry.menu) {
+    closeMenuFor(entry)
     return
   }
 
-  panel.failed({
-    message: response?.error || 'Skudo could not be reached.',
-    onDismiss: () => closePanelFor(entry),
-  })
+  const menu = menuFor(entry)
+  const where = site()
+
+  if (entry.field.action === 'reuse') {
+    const rows = menu.show('Email address', [
+      {
+        name: 'lookup',
+        icon: menu.icons.reuse,
+        title: `Aliases you gave ${where}`,
+        sub: menu.waitingNode('Looking'),
+        disabled: true,
+      },
+    ])
+
+    const response = await send('ALIASES_FOR_SITE', { site: where })
+    if (!entry.menu) return
+    if (!response?.ok) return showFailure(entry, response)
+
+    const aliases = response.data
+    if (aliases.length === 0) return offerCreate(entry, menu, { firstTime: true })
+
+    menu.show(
+      'Email address',
+      aliases
+        .map((alias) => ({
+          icon: menu.icons.mask,
+          title: alias.email.split('@')[0],
+          sub: alias.description || alias.email.slice(alias.email.indexOf('@')),
+          aside: menu.icons.tick,
+          onClick: () => completeWith(entry, { ...alias, reused: true }),
+        }))
+        .concat([
+          {
+            icon: menu.icons.plus,
+            title: 'Make a new one instead',
+            sub: `A fresh address for ${where}`,
+            onClick: () => create(entry, menu, { fresh: true }),
+          },
+        ])
+    )
+    void rows
+    return
+  }
+
+  offerCreate(entry, menu, {})
+}
+
+/** La riga che crea, piu' quella che riusa se in sessione ce n'e' gia' una. */
+function offerCreate(entry, menu, { firstTime = false }) {
+  menu.show('Email address', [
+    {
+      name: 'create',
+      icon: menu.icons.mask,
+      title: 'Hide my email',
+      sub: firstTime
+        ? `You have no alias for ${site()} yet`
+        : 'A new address that forwards to your inbox',
+      tone: 'accent',
+      aside: menu.icons.plus,
+      onClick: () => create(entry, menu, {}),
+    },
+  ])
+}
+
+async function create(entry, menu, { fresh = false }) {
+  const handles = menu.show('Email address', [
+    {
+      name: 'create',
+      icon: menu.icons.mask,
+      title: 'Hide my email',
+      sub: menu.waitingNode('Creating'),
+      tone: 'accent',
+      disabled: true,
+    },
+  ])
+
+  entry.icon.setBusy(true)
+  const response = await send('CREATE_ALIAS', { site: site(), fresh })
+  entry.icon.setBusy(false)
+
+  if (!entry.menu) return
+  if (!response?.ok) return showFailure(entry, response, { retry: () => create(entry, menu, { fresh }) })
+
+  void handles
+  completeWith(entry, response.data)
+}
+
+/**
+ * Il guasto, dentro una riga.
+ *
+ * Il contorno rosso che c'era prima significava insieme "non sei collegato",
+ * "il limite e' finito" e "la rete non risponde", e nessuna delle tre si
+ * capiva. Qui c'e' scritto cosa e' successo, e la riga stessa e' il rimedio.
+ */
+function showFailure(entry, response, { retry } = {}) {
+  const menu = menuFor(entry)
+
+  if (response?.code === 'UNAUTHENTICATED') {
+    menu.show('Email address', [
+      {
+        icon: menu.icons.link,
+        title: 'Connect Skudo',
+        sub: 'One click, nothing to copy',
+        tone: 'accent',
+        aside: menu.icons.plus,
+        onClick: () => {
+          send('OPEN_CONNECT')
+          closeMenuFor(entry)
+        },
+      },
+    ])
+    return
+  }
+
+  const message = response?.error || 'Skudo could not be reached'
+
+  menu.show('Email address', [
+    {
+      icon: menu.icons.alert,
+      title: 'No alias was created',
+      sub: message,
+      tone: 'warn',
+      onClick: retry,
+      disabled: !retry,
+    },
+    ...(retry
+      ? [
+          {
+            icon: menu.icons.reuse,
+            title: 'Try again',
+            onClick: retry,
+          },
+        ]
+      : []),
+  ])
 }
 
 /* ------------------------------------------------------------------ *
@@ -433,10 +552,10 @@ function scan() {
 }
 
 /**
- * La scansione costa: si fa quando il browser è libero, mai dentro un gestore
+ * La scansione costa: si fa quando il browser e' libero, mai dentro un gestore
  * di eventi. `requestIdleCallback` non esiste su tutti i motori, e su quelli
- * con resistFingerprinting il tempo che riporta è grossolano, quindi il
- * ripiego è un timeout normale.
+ * con resistFingerprinting il tempo che riporta e' grossolano, quindi il
+ * ripiego e' un timeout normale.
  */
 function scheduleScan() {
   if (rescanHandle !== null) return
@@ -449,13 +568,17 @@ function scheduleScan() {
     : setTimeout(run, 300)
 }
 
-function start() {
-  // Il tema, chiesto una volta sola. Nessun segreto passa di qui: e' la stessa
-  // risposta che riceve il popup, meno il token, che non esce mai dal contesto
-  // di sfondo.
-  send('GET_STATE').then((response) => {
-    if (response?.ok) setTheme(response.data.theme)
-  })
+async function start() {
+  // Il tema e la lista dei siti zittiti, chiesti una volta sola. Nessun segreto
+  // passa di qui: e' la stessa risposta che riceve il popup, meno il token, che
+  // non esce mai dal contesto di sfondo.
+  const state = await send('GET_STATE')
+  if (state?.ok) {
+    setTheme(state.data.theme)
+    // Un sito su cui l'utente ha detto di non suggerire non viene nemmeno
+    // guardato: niente icone, niente scansione, niente osservatore.
+    if ((state.data.pausedSites || []).includes(site())) return
+  }
 
   scan()
 
@@ -466,8 +589,8 @@ function start() {
   addEventListener('animationend', wake, { passive: true, capture: true })
 
   new MutationObserver((mutations) => {
-    // Il riposizionamento è a buon mercato e serve comunque: qualunque
-    // mutazione può aver spostato un campo.
+    // Il riposizionamento e' a buon mercato e serve comunque: qualunque
+    // mutazione puo' aver spostato un campo.
     schedule()
 
     for (const mutation of mutations) {

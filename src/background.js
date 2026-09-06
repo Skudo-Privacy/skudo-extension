@@ -224,6 +224,38 @@ const handlers = {
     return { ...settings, signedIn: token.length > 0 }
   },
 
+  /**
+   * Zittisce l'estensione su un sito.
+   *
+   * Arriva dal content script, quindi da una pagina qualunque, e per questo il
+   * dominio non viene creduto: si usa quello della scheda che ha mandato il
+   * messaggio. Un sito che potesse scrivere questa lista da solo potrebbe
+   * spegnere l'estensione altrove, che e' esattamente quello che vorrebbe fare
+   * un sito a cui l'estensione da' fastidio.
+   */
+  async PAUSE_SITE(_message, sender) {
+    const url = sender?.tab?.url || sender?.url || ''
+    let host = ''
+    try {
+      host = new URL(url).hostname.replace(/^www\./, '')
+    } catch {
+      throw new ApiError('That site could not be identified.', { code: 'INVALID' })
+    }
+    if (!host) throw new ApiError('That site could not be identified.', { code: 'INVALID' })
+
+    const { pausedSites = [] } = await getSettings()
+    if (!pausedSites.includes(host)) {
+      await setSettings({ pausedSites: [...pausedSites, host] })
+    }
+    return { paused: host }
+  },
+
+  async RESUME_SITE({ site }) {
+    const { pausedSites = [] } = await getSettings()
+    await setSettings({ pausedSites: pausedSites.filter((entry) => entry !== site) })
+    return { resumed: site }
+  },
+
   /* I verbi che seguono servono solo al popup, che è codice nostro. Un content
      script non può raggiungerli in modo utile: `SIGN_IN` verificherebbe una
      chiave che il sito dovrebbe già possedere, e gli altri richiedono un id di
