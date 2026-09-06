@@ -62,11 +62,12 @@ const bundles = [
  * guardando e si nota usando.
  */
 async function writeTokens() {
-  const { TOKENS, TOKENS_DARK } = await import(join(src, 'shared', 'tokens.js'))
+  const { TOKENS, TOKENS_DARK, FONT_FACE } = await import(join(src, 'shared', 'tokens.js'))
 
   await writeFile(
     join(out, 'tokens.css'),
     `/* Generato da src/shared/tokens.js. Non modificare a mano. */\n` +
+      `${FONT_FACE.trim()}\n\n` +
       `:root {\n${TOKENS.trimEnd()}\n}\n\n` +
       `@media (prefers-color-scheme: dark) {\n` +
       `  :root:not([data-theme='light']) {\n${TOKENS_DARK.trimEnd()}\n  }\n}\n\n` +
@@ -82,6 +83,9 @@ async function copyStatic() {
   await cp(join(src, 'connect.html'), join(out, 'connect.html'))
   await cp(join(src, 'connect.css'), join(out, 'connect.css'))
   await cp(join(src, 'assets', 'img'), join(out, 'img'), { recursive: true })
+  // Inter, incluso invece che preso da un CDN: vedi il commento in
+  // src/shared/tokens.js. La licenza viaggia con il carattere.
+  await cp(join(src, 'assets', 'fonts'), join(out, 'fonts'), { recursive: true })
   // Gli avvisi di copyright viaggiano nel pacchetto, come richiesto dalle
   // licenze del lavoro derivato. Vedi NOTICE.md.
   await cp(join(root, 'NOTICE.md'), join(out, 'NOTICE.md'))

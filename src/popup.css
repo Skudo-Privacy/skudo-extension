@@ -53,6 +53,15 @@ body {
   font-size: 13px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /*
+   * Inter e' variabile e ha una dimensione ottica: sotto i quattordici pixel
+   * apre le forme e allarga le spaziature da solo. Senza questa riga il browser
+   * usa il valore automatico e a queste misure il testo si chiude e sembra
+   * sporco.
+   */
+  font-optical-sizing: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 /*
@@ -80,7 +89,7 @@ body::before {
   border-bottom: 1px solid var(--hairline);
 }
 .bar__mark { display: block; flex: none; border-radius: 5px; }
-.bar__name { font-size: 13.5px; font-weight: 640; letter-spacing: -.008em; }
+.bar__name { font-size: 13.5px; font-weight: 620; letter-spacing: -.014em; }
 .bar__site {
   flex: 1;
   min-width: 0;
@@ -101,7 +110,7 @@ body::before {
 .screen--settings { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow-y: auto; }
 
 .prompt { max-width: 42ch; text-align: center; }
-.prompt h1 { font-size: 19px; font-weight: 650; letter-spacing: -.018em; margin-bottom: 8px; }
+.prompt h1 { font-size: 20px; font-weight: 620; letter-spacing: -.026em; margin-bottom: 8px; }
 .prompt p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
 
 /* Le due colonne ---------------------------------------------------- */
@@ -209,8 +218,8 @@ body::before {
 .row__title {
   display: block;
   font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -.004em;
+  font-weight: 550;
+  letter-spacing: -.011em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -236,9 +245,10 @@ body::before {
 .detail__label {
   display: block;
   font-size: 11px;
-  font-weight: 620;
+  font-weight: 560;
+  letter-spacing: .005em;
   color: var(--muted);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
 /*
@@ -315,7 +325,7 @@ body::before {
   text-align: center;
 }
 .blank__inner { max-width: 34ch; }
-.blank h2 { font-size: 14px; font-weight: 640; letter-spacing: -.01em; margin-bottom: 5px; }
+.blank h2 { font-size: 14.5px; font-weight: 600; letter-spacing: -.018em; margin-bottom: 5px; }
 .blank p { color: var(--muted); font-size: 12.5px; }
 .blank svg { color: var(--hairline-strong); margin-bottom: 12px; }
 
@@ -362,8 +372,8 @@ body::before {
   border-radius: var(--radius-sm);
   font: inherit;
   font-size: 13px;
-  font-weight: 620;
-  letter-spacing: -.005em;
+  font-weight: 580;
+  letter-spacing: -.011em;
   cursor: pointer;
   transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
