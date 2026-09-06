@@ -64,19 +64,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/*
- * Il filo in cima: verde per quasi tutta la larghezza, lime nell'ultimo
- * tratto. E' il segno di un annullo postale, ed e' lo stesso che porta il menu
- * dentro le pagine. Dice di chi e' questa finestra in tre pixel, invece che con
- * un logo grande.
- */
-body::before {
-  content: '';
-  flex: none;
-  height: 3px;
-  background: linear-gradient(90deg, var(--brand) 0 72%, var(--signal) 72% 100%);
-}
-
 /* Intestazione ------------------------------------------------------ */
 
 .bar {
@@ -137,16 +124,13 @@ body::before {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 9px 10px;
-  padding: 0 10px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: var(--label);
-  box-shadow: inset 0 0 0 1px var(--hairline);
+  gap: 8px;
+  padding: 0 13px;
+  height: 38px;
+  border-bottom: 1px solid var(--hairline);
   color: var(--muted);
 }
-.search:focus-within { box-shadow: inset 0 0 0 1px var(--brand); color: var(--ink); }
+.search:focus-within { color: var(--ink); box-shadow: inset 0 -2px 0 var(--brand); }
 .search svg { flex: none; display: block; }
 .search input {
   flex: 1;
@@ -167,19 +151,30 @@ body::before {
   flex: 1;
   min-height: 0;
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 0;
   list-style: none;
   overflow-y: auto;
 }
 
+/*
+ * Le righe sono righe, non schede.
+ *
+ * Erano rettangoli arrotondati con un fondo, uno dentro l'altro con la casella
+ * di ricerca e con il blocco dell'indirizzo: quando ogni cosa e' una scheda con
+ * lo stesso raggio, la morbidezza uniforme prende il posto della gerarchia e
+ * niente ha piu' un peso diverso da niente.
+ *
+ * Un elenco si separa con una linea, e quello scelto si marca sul bordo. E'
+ * come fa qualunque elenco che si legge bene, dalla posta in poi.
+ */
 .row {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 9px;
+  gap: 10px;
+  padding: 9px 12px 9px 13px;
   border: 0;
-  border-radius: var(--radius-sm);
   background: none;
   color: inherit;
   font: inherit;
@@ -187,9 +182,17 @@ body::before {
   cursor: pointer;
   transition: background-color var(--fast) var(--ease);
 }
-.row:hover { background: var(--label); }
+.list li + li .row { box-shadow: inset 0 1px 0 var(--hairline); }
+.row:hover { background: var(--sunken); }
 .row:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
-.row[aria-selected='true'] { background: var(--label-hover); }
+.row[aria-selected='true'] { background: var(--label); }
+.row[aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--brand);
+}
 
 /*
  * L'iniziale al posto di un'icona uguale per tutti.
@@ -263,10 +266,9 @@ body::before {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 11px 8px 11px 12px;
-  border-radius: var(--radius-sm);
+  padding: 13px 8px 13px 14px;
+  border-radius: var(--radius);
   background: var(--label);
-  box-shadow: inset 0 0 0 1px var(--hairline);
 }
 .address__text {
   flex: 1;
@@ -416,12 +418,12 @@ body::before {
 input[type='text'],
 select {
   width: 100%;
-  min-height: 34px;
-  padding: 7px 10px;
+  min-height: 36px;
+  padding: 8px 11px;
   border: 0;
   border-radius: var(--radius-sm);
-  background: var(--label);
-  box-shadow: inset 0 0 0 1px var(--hairline);
+  background: var(--sunken);
+  box-shadow: inset 0 -1px 0 var(--hairline-strong);
   color: var(--ink);
   font: inherit;
   font-size: 12.5px;
@@ -429,7 +431,7 @@ select {
 input:focus-visible,
 select:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px var(--brand);
+  box-shadow: inset 0 -2px 0 var(--brand);
 }
 
 /* Impostazioni ------------------------------------------------------ */

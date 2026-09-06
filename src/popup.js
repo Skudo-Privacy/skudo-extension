@@ -277,15 +277,6 @@ function addressBlock(alias) {
   return wrap
 }
 
-function labelled(text, node) {
-  const wrap = document.createElement('div')
-  wrap.className = 'detail__block'
-  const label = document.createElement('span')
-  label.className = 'detail__label'
-  label.textContent = text
-  wrap.append(label, node)
-  return wrap
-}
 
 /** Una riga del blocco in fondo: etichetta a sinistra, valore o comando a destra. */
 function detailRow(label, value) {
@@ -332,7 +323,7 @@ function noteField(alias) {
   input.type = 'text'
   input.maxLength = 200
   input.value = alias.description || ''
-  input.placeholder = 'What is this for?'
+  input.placeholder = 'Add a note, like where you used it'
   input.id = 'detail-note'
 
   const save = async () => {
@@ -415,15 +406,23 @@ function renderDetail() {
   const detail = document.createElement('div')
   detail.className = 'detail'
 
+  /*
+   * Niente etichetta sopra l'indirizzo.
+   *
+   * Un'etichetta che dice "Alias" sopra un indirizzo email e' una delle cose
+   * che si aggiungono per riempire, e non dice niente che non si veda: chi ha
+   * appena premuto una riga di alias sa cosa sta guardando. Lo stesso per la
+   * nota, che ha gia' un segnaposto dentro il campo.
+   */
   const head = document.createElement('div')
   head.className = 'detail__head'
-  const label = document.createElement('span')
-  label.className = 'detail__label'
-  label.textContent = 'Alias'
-  head.append(label, addressBlock(alias))
+  head.appendChild(addressBlock(alias))
   detail.appendChild(head)
 
-  detail.appendChild(labelled('Note', noteField(alias)))
+  const note = document.createElement('div')
+  note.className = 'detail__block'
+  note.appendChild(noteField(alias))
+  detail.appendChild(note)
 
   const rows = document.createElement('div')
   rows.className = 'detail__rows'

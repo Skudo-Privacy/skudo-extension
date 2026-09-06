@@ -16,16 +16,7 @@ body.connect {
   padding: 56px 20px;
   display: flex;
   justify-content: center;
-  background: var(--label);
-}
-
-/* Il filo in cima vale per tutte le nostre superfici, questa compresa. */
-body.connect::before {
-  content: '';
-  position: fixed;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, var(--brand) 0 72%, var(--signal) 72% 100%);
+  background: var(--sunken);
 }
 
 .sheet {

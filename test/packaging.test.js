@@ -190,6 +190,20 @@ describe('compatibilità del manifest', () => {
     expect(body).toMatch(/revokeSelf\(\)/)
   })
 
+  it('il CSS del menu non contiene apici inversi', () => {
+    // Il foglio di stile del menu vive dentro un template literal, e un apice
+    // inverso in un commento CSS lo chiude a meta': la costruzione fallisce con
+    // un errore di sintassi JavaScript su una riga che parla di tipografia. E'
+    // successo quattro volte scrivendo commenti che citavano un nome di
+    // proprieta'. La costruzione lo prende, ma solo dopo aver perso il giro.
+    const ui = readFileSync(join(src, 'content', 'ui.js'), 'utf8')
+    const opening = ui.indexOf('const STYLE = `') + 'const STYLE = `'.length
+    const closing = ui.indexOf('`\n', ui.indexOf('prefers-reduced-motion'))
+    const style = ui.slice(opening, closing)
+
+    expect(style.includes('`'), 'un apice inverso qui rompe la costruzione').toBe(false)
+  })
+
   it('non carica webextension-polyfill', () => {
     // Da MV3 le API di Chrome restituiscono promesse. Il polyfill costerebbe
     // una trentina di kilobyte caricati anche nel content script, cioè su

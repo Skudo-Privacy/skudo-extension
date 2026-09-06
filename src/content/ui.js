@@ -133,6 +133,13 @@ const STYLE = `
 .scope {
 ${TOKENS}
   color: var(--ink);
+  /*
+   * Il token --ui nomina IBM Plex per primo, ma qui il carattere non c'e': non
+   * viene incluso fra le risorse raggiungibili dalle pagine, perche' sarebbe una
+   * superficie in piu' con cui un sito puo' accorgersi dell'estensione. La
+   * pila di sistema che segue nel token e' il ripiego previsto, e in
+   * duecentocinquanta pixel di righe dense la differenza non si vede.
+   */
   font-family: var(--ui);
   -webkit-font-smoothing: antialiased;
 }
@@ -171,7 +178,7 @@ ${TOKENS}
 
 .menu {
   width: ${MENU_WIDTH}px;
-  border-radius: 13px;
+  border-radius: var(--radius);
   background: var(--paper);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -304,7 +311,7 @@ ${TOKENS}
   width: ${MENU_WIDTH}px;
   display: flex; align-items: center; gap: 9px;
   padding: 9px 10px 9px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--paper);
   box-shadow: var(--shadow);
   animation: rise 170ms var(--ease);
