@@ -2,9 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
     <title>Skudo</title>
     <!-- Generato da src/shared/tokens.js durante la costruzione: una sola
-         tavolozza per il popup, la pagina di collegamento e il pannello che
+         tavolozza per il popup, la pagina di collegamento e il menu che
          compare dentro le pagine. -->
     <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="popup.css" />
@@ -13,6 +14,7 @@
     <header class="bar">
       <img class="bar__mark" src="img/icon_32.png" width="20" height="20" alt="" />
       <span class="bar__name">Skudo</span>
+      <span class="bar__site" id="site"></span>
       <button type="button" id="settings-toggle" class="icon-button" aria-label="Settings" aria-expanded="false">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
           <circle cx="12" cy="12" r="3.2" />
@@ -22,119 +24,112 @@
     </header>
 
     <!-- Collegamento -->
-    <section id="screen-signin" class="screen" hidden>
-      <p class="site">Connect this browser</p>
-      <p class="lede">
-        One click on a Skudo page, nothing to copy. The extension gets
-        permission to make aliases, and nothing else.
-      </p>
-      <button type="button" id="connect" class="button button--primary">Connect</button>
+    <section id="screen-signin" class="screen screen--center" hidden>
+      <div class="prompt">
+        <h1>Connect this browser</h1>
+        <p>
+          One click on a Skudo page, nothing to copy. The extension gets
+          permission to make aliases, and nothing else.
+        </p>
+        <button type="button" id="connect" class="button button--primary">Connect</button>
+      </div>
     </section>
 
-    <!-- Schermata principale -->
-    <section id="screen-main" class="screen" hidden>
-      <p class="site" id="site"></p>
+    <!--
+      Schermata principale: elenco a sinistra, dettaglio a destra.
 
-      <button type="button" id="create" class="button button--primary">
-        <span class="spinner" hidden></span>
-        <span class="button__label">Create an alias</span>
-      </button>
-      <p class="error" id="create-error" hidden></p>
-
-      <!-- La bozza: l'alias esiste gia' sul server, ma la nota non e' salvata
-           finche' non si preme Done, e Discard lo cancella del tutto. -->
-      <div id="draft" class="card" hidden>
-        <div class="alias">
-          <span id="draft-email" class="address__text"></span>
-          <button type="button" id="copy" class="icon-button" aria-label="Copy">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9.5 9.5h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 8 20v-9a1.5 1.5 0 0 1 1.5-1.5Z" />
-              <path d="M5.5 15.5H5A1.5 1.5 0 0 1 3.5 14V5A1.5 1.5 0 0 1 5 3.5h9A1.5 1.5 0 0 1 15.5 5v.5" />
-            </svg>
-          </button>
-        </div>
-        <label class="field" style="margin-bottom: 12px">
-          <span class="field__label">Note</span>
-          <input type="text" id="draft-description" maxlength="200" placeholder="What is this for?" />
+      E' la forma che serve a questo popup. Un alias non e' una riga da
+      guardare, e' una cosa su cui si fanno tre o quattro operazioni, e in una
+      colonna sola quelle operazioni o stanno nascoste sotto un menu o
+      seppelliscono gli indirizzi. Due colonne le mettono davanti senza togliere
+      spazio all'elenco.
+    -->
+    <section id="screen-main" class="screen screen--split" hidden>
+      <div class="pane pane--list">
+        <label class="search">
+          <span class="sr-only">Search your aliases</span>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+            <circle cx="10.8" cy="10.8" r="6.3" />
+            <path d="m15.4 15.4 4.1 4.1" />
+          </svg>
+          <input type="search" id="search" placeholder="Search your aliases" autocomplete="off" />
         </label>
-        <div class="row">
-          <button type="button" id="draft-discard" class="button button--quiet">Discard</button>
-          <button type="button" id="draft-done" class="button button--primary">Done</button>
+
+        <p class="empty" id="list-empty" hidden></p>
+        <ul class="list" id="alias-list"></ul>
+
+        <div class="pane__foot">
+          <button type="button" id="create" class="button button--primary">
+            <span class="spinner" hidden></span>
+            <span class="button__label">Create an alias</span>
+          </button>
+          <p class="error" id="create-error" hidden></p>
         </div>
       </div>
 
-      <!-- L'elenco. Con un sito davanti mostra gli alias di quel sito; senza,
-           gli ultimi creati. La ricerca c'e' in tutti e due i casi, perche'
-           "qual era l'indirizzo che ho dato a quel negozio" e' la domanda per
-           cui questo popup si apre quando non si sta compilando niente. -->
-      <div id="browse">
-        <label class="field search">
-          <span class="sr-only">Search your aliases</span>
-          <input type="search" id="search" placeholder="Search your aliases" autocomplete="off" />
-        </label>
-        <h2 class="heading" id="list-heading">Recent</h2>
-        <p class="empty" id="list-empty" hidden></p>
-        <ul class="list" id="alias-list"></ul>
-        <p class="note" id="list-note" hidden>
-          Showing the most recent. Search above, or open Skudo for the full list.
-        </p>
+      <div class="pane pane--detail" id="detail">
+        <!-- Riempito da popup.js: vedi renderDetail(). -->
       </div>
     </section>
 
     <!-- Impostazioni -->
-    <section id="screen-settings" class="screen" hidden>
-      <label class="switch">
-        <input type="checkbox" id="opt-inject" />
-        <span>
-          <strong>Show an icon in email fields</strong>
-          <small>Needs permission to read the pages you visit.</small>
-        </span>
-      </label>
+    <section id="screen-settings" class="screen screen--settings" hidden>
+      <div class="settings">
+        <label class="switch">
+          <input type="checkbox" id="opt-inject" />
+          <span>
+            <strong>Show an icon in email fields</strong>
+            <small>Needs permission to read the pages you visit.</small>
+          </span>
+        </label>
 
-      <label class="switch">
-        <input type="checkbox" id="opt-menu" />
-        <span>
-          <strong>Right-click menu</strong>
-          <small>Create an alias from any text field.</small>
-        </span>
-      </label>
+        <label class="switch">
+          <input type="checkbox" id="opt-menu" />
+          <span>
+            <strong>Right-click menu</strong>
+            <small>Create an alias from any text field.</small>
+          </span>
+        </label>
 
-      <label class="switch">
-        <input type="checkbox" id="opt-describe" />
-        <span>
-          <strong>Note the site on each alias</strong>
-          <small>So your alias list says where each one went.</small>
-        </span>
-      </label>
+        <label class="switch">
+          <input type="checkbox" id="opt-describe" />
+          <span>
+            <strong>Note the site on each alias</strong>
+            <small>So your alias list says where each one went.</small>
+          </span>
+        </label>
+      </div>
 
-      <label class="field" style="margin-top: 16px">
-        <span class="field__label">Domain</span>
-        <select id="opt-domain"></select>
-      </label>
+      <div class="settings">
+        <label class="field">
+          <span class="field__label">Domain</span>
+          <select id="opt-domain"></select>
+        </label>
 
-      <label class="field">
-        <span class="field__label">Format</span>
-        <select id="opt-format">
-          <option value="random_characters">Random characters</option>
-          <option value="random_words">Random words</option>
-          <option value="uuid">UUID</option>
-        </select>
-      </label>
+        <label class="field">
+          <span class="field__label">Format</span>
+          <select id="opt-format">
+            <option value="random_characters">Random characters</option>
+            <option value="random_words">Random words</option>
+            <option value="uuid">UUID</option>
+          </select>
+        </label>
 
-      <label class="field">
-        <span class="field__label">Appearance</span>
-        <select id="opt-theme">
-          <option value="auto">Match the browser</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-        <span class="field__hint">
-          Browsers that resist fingerprinting always report a light theme.
-          Choose it here instead.
-        </span>
-      </label>
+        <label class="field">
+          <span class="field__label">Appearance</span>
+          <select id="opt-theme">
+            <option value="auto">Match the browser</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+          <span class="field__hint">
+            Browsers that resist fingerprinting always report a light theme.
+            Choose it here instead.
+          </span>
+        </label>
 
-      <button type="button" id="signout" class="button button--quiet">Sign out</button>
+        <button type="button" id="signout" class="button button--quiet">Sign out</button>
+      </div>
     </section>
 
     <script src="popup.js"></script>

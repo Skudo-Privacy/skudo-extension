@@ -112,11 +112,10 @@ describe('il popup', () => {
     await startPopup()
 
     expect(document.getElementById('site').textContent).toBe('example.com')
-    expect(document.getElementById('list-heading').textContent).toBe('Already on this site')
     expect(document.querySelectorAll('#alias-list li')).toHaveLength(1)
   })
 
-  it('senza un sito davanti diventa l elenco dei propri alias', async () => {
+  it('senza un sito davanti mostra gli ultimi alias', async () => {
     const fake = await startPopup()
     fake.api.tabs.query = async () => [{ id: 1, url: 'about:newtab' }]
 
@@ -129,68 +128,96 @@ describe('il popup', () => {
     await settle()
     await settle()
 
-    expect(document.getElementById('site').textContent).toBe('Your aliases')
-    expect(document.getElementById('list-heading').textContent).toBe('Recent')
-
-    const rows = document.querySelectorAll('#alias-list li')
+    const rows = document.querySelectorAll('#alias-list .row')
     expect(rows).toHaveLength(2)
     // Il secondo è spento: deve vedersi.
     expect(rows[1].classList.contains('is-off')).toBe(true)
   })
 
+  it('senza niente scelto la colonna di destra invita, non resta vuota', async () => {
+    await startPopup()
+
+    const blank = document.querySelector('#detail .blank')
+    expect(blank).not.toBeNull()
+    expect(blank.textContent).toContain('Pick an alias')
+  })
+
+  it('scegliere una riga apre il dettaglio con indirizzo, nota e data', async () => {
+    await startPopup()
+
+    document.querySelector('#alias-list .row').click()
+    await settle()
+
+    const detail = document.getElementById('detail')
+    expect(detail.textContent).toContain('quiet.pine8x')
+    expect(detail.querySelector('#detail-note').value).toBe('example.com')
+    expect(detail.textContent).toContain('Receiving mail')
+  })
+
   it('non nomina mai l indirizzo di inoltro', async () => {
     await startPopup()
+    document.querySelector('#alias-list .row').click()
+    await settle()
 
     // Non è una prova sul testo per pignoleria: il vincolo è che di quella
     // cosa non si parli, e una riga aggiunta per comodità mesi dopo sarebbe
     // il modo esatto in cui rientrerebbe.
     const text = document.body.textContent.toLowerCase()
-    for (const word of ['recipient', 'forward', 'inoltro', 'real address']) {
+    for (const word of ['recipient', 'forwards to', 'inoltro', 'real address']) {
       expect(text).not.toContain(word)
     }
   })
 
-  it('accende e spegne un alias', async () => {
+  it('accende e spegne un alias dal dettaglio', async () => {
     const fake = await startPopup()
 
-    const row = document.querySelectorAll('#alias-list li')[0]
-    const toggle = row.querySelector('[aria-label="Turn off"]')
-    expect(toggle).not.toBeNull()
+    document.querySelector('#alias-list .row').click()
+    await settle()
+
+    const toggle = document.querySelector('#detail .toggle')
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
 
     toggle.click()
     await settle()
 
     expect(fake.sent).toContainEqual({ type: 'SET_ALIAS_ACTIVE', id: 'a1', active: false })
-    expect(row.classList.contains('is-off')).toBe(true)
+    expect(document.querySelector('#alias-list .row').classList.contains('is-off')).toBe(true)
+    expect(document.querySelector('#detail .toggle').getAttribute('aria-checked')).toBe('false')
   })
 
   it('chiede conferma prima di cancellare, e non cancella se si dice di no', async () => {
     const fake = await startPopup()
 
-    const row = document.querySelectorAll('#alias-list li')[0]
-    row.querySelector('[aria-label="Delete"]').click()
+    document.querySelector('#alias-list .row').click()
+    await settle()
 
-    const confirm = row.querySelector('.row-alias__confirm')
-    expect(confirm).not.toBeNull()
+    const buttons = () => [...document.querySelectorAll('#detail button')]
+    buttons().find((b) => b.textContent === 'Delete alias').click()
+    await settle()
 
-    ;[...confirm.querySelectorAll('button')].find((b) => b.textContent === 'Keep').click()
+    buttons().find((b) => b.textContent === 'Keep it').click()
     await settle()
 
     expect(fake.sent.some((m) => m.type === 'DELETE_ALIAS')).toBe(false)
-    expect(row.isConnected).toBe(true)
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(1)
   })
 
-  it('cancella quando si conferma', async () => {
+  it('cancella quando si conferma, e la colonna di destra torna vuota', async () => {
     const fake = await startPopup()
 
-    const row = document.querySelectorAll('#alias-list li')[0]
-    row.querySelector('[aria-label="Delete"]').click()
-    const confirm = row.querySelector('.row-alias__confirm')
-    ;[...confirm.querySelectorAll('button')].find((b) => b.textContent === 'Delete').click()
+    document.querySelector('#alias-list .row').click()
+    await settle()
+
+    const buttons = () => [...document.querySelectorAll('#detail button')]
+    buttons().find((b) => b.textContent === 'Delete alias').click()
+    await settle()
+
+    buttons().find((b) => b.textContent === 'Delete for good').click()
     await settle()
 
     expect(fake.sent).toContainEqual({ type: 'DELETE_ALIAS', id: 'a1' })
-    expect(row.isConnected).toBe(false)
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(0)
+    expect(document.querySelector('#detail .blank')).not.toBeNull()
   })
 
   it('la ricerca chiede al contesto di sfondo e ridisegna', async () => {
@@ -207,7 +234,7 @@ describe('il popup', () => {
     await new Promise((resolve) => setTimeout(resolve, 400))
 
     expect(fake.sent).toContainEqual({ type: 'SEARCH_ALIASES', query: 'harbour' })
-    expect(document.getElementById('list-heading').textContent).toBe('Results')
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(1)
   })
 
   it('senza account collegato mostra la schermata di collegamento', async () => {

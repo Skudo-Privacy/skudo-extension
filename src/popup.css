@@ -1,26 +1,52 @@
 /*
  * Il popup.
  *
- * Stesso sistema visivo del pannello che compare nelle pagine: i valori
- * arrivano da `tokens.css`, generato da src/shared/tokens.js dalla
- * costruzione. Due tavolozze scritte a mano divergono, e una differenza di
- * quattro punti di grigio non si nota guardando: si nota usando il prodotto e
- * avendo l'impressione di usarne due.
+ * Stesso sistema visivo del menu che compare nelle pagine: i valori arrivano da
+ * `tokens.css`, generato da src/shared/tokens.js dalla costruzione. Due
+ * tavolozze scritte a mano divergono, e una differenza di quattro punti di
+ * grigio non si nota guardando: si nota usando il prodotto e avendo
+ * l'impressione di usarne due.
  *
- * Il tema e' un attributo su <html>, non solo una media query. Su Mullvad
- * Browser e LibreWolf resistFingerprinting fa rispondere "light" a tutti,
- * sempre: chi usa il tema scuro si ritroverebbe un popup bianco in faccia
- * senza poterci fare niente. La media query serve solo a scegliere il valore
- * iniziale. Vedi docs/BROWSERS.md.
+ * ## La misura
+ *
+ * 600x430. E' la misura del popup di Proton Pass, ed e' quella giusta per un
+ * motivo che si vede solo provandola: a 360 di larghezza un alias e' una riga
+ * da guardare, e tutto quello che ci si puo' fare sopra o sta nascosto sotto un
+ * menu o seppellisce gli indirizzi. A 600 ci stanno due colonne, l'elenco a
+ * sinistra e il dettaglio a destra, e le operazioni sono davanti senza togliere
+ * spazio a niente.
+ *
+ * L'altezza e' fissa e non cresce col contenuto: un popup che cambia altezza
+ * ogni volta che si cerca qualcosa fa saltare l'elenco sotto il puntatore.
+ *
+ * ## Il tema
+ *
+ * E' un attributo su <html>, non solo una media query. Su Mullvad Browser e
+ * LibreWolf resistFingerprinting fa rispondere "light" a tutti, sempre: chi usa
+ * il tema scuro si ritroverebbe un popup bianco in faccia senza poterci fare
+ * niente. La media query serve solo a scegliere il valore iniziale. Vedi
+ * docs/BROWSERS.md.
  */
+
+:root {
+  --popup-width: 600px;
+  --popup-height: 430px;
+  --bar-height: 44px;
+  --list-width: 232px;
+}
 
 * { box-sizing: border-box; margin: 0; }
 
-html { color-scheme: light dark; }
+html,
+body {
+  width: var(--popup-width);
+  height: var(--popup-height);
+  overflow: hidden;
+}
 
 body {
-  width: 360px;
-  min-height: 200px;
+  display: flex;
+  flex-direction: column;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--ui);
@@ -31,13 +57,13 @@ body {
 
 /*
  * Il filo in cima: verde per quasi tutta la larghezza, lime nell'ultimo
- * tratto. E' il segno di un annullo postale, ed e' lo stesso che porta il
- * pannello dentro le pagine. Dice di chi e' questa superficie in tre pixel,
- * invece che con un logo grande.
+ * tratto. E' il segno di un annullo postale, ed e' lo stesso che porta il menu
+ * dentro le pagine. Dice di chi e' questa finestra in tre pixel, invece che con
+ * un logo grande.
  */
 body::before {
   content: '';
-  display: block;
+  flex: none;
   height: 3px;
   background: linear-gradient(90deg, var(--brand) 0 72%, var(--signal) 72% 100%);
 }
@@ -45,58 +71,299 @@ body::before {
 /* Intestazione ------------------------------------------------------ */
 
 .bar {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px 0;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bar-height);
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--hairline);
 }
 .bar__mark { display: block; flex: none; border-radius: 5px; }
-.bar__name { font-size: 13px; font-weight: 640; letter-spacing: -.007em; }
+.bar__name { font-size: 13.5px; font-weight: 640; letter-spacing: -.008em; }
+.bar__site {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.screen { padding: 12px 16px 16px; }
+/* Schermate --------------------------------------------------------- */
+
+.screen { flex: 1; min-height: 0; }
 .screen[hidden] { display: none; }
+.screen--split { display: flex; }
+.screen--center { display: grid; place-items: center; padding: 24px; }
+.screen--settings { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow-y: auto; }
 
-/* Titoli e testo ---------------------------------------------------- */
+.prompt { max-width: 42ch; text-align: center; }
+.prompt h1 { font-size: 19px; font-weight: 650; letter-spacing: -.018em; margin-bottom: 8px; }
+.prompt p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
 
-.site {
-  margin: 0 0 12px;
-  font-size: 16px; font-weight: 640; letter-spacing: -.014em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* Le due colonne ---------------------------------------------------- */
+
+.pane { display: flex; flex-direction: column; min-height: 0; }
+
+.pane--list {
+  flex: none;
+  width: var(--list-width);
+  border-right: 1px solid var(--hairline);
 }
-.lede { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; max-width: 46ch; }
-.heading {
-  margin: 16px 0 8px;
-  font-size: 11.5px; font-weight: 620; color: var(--muted);
-  letter-spacing: -.002em;
+
+.pane--detail { flex: 1; min-width: 0; overflow-y: auto; }
+
+.pane__foot {
+  flex: none;
+  padding: 9px 10px;
+  border-top: 1px solid var(--hairline);
 }
-.error { margin: 10px 0 0; color: var(--alarm); font-size: 12.5px; }
-.empty, .note { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
-.note { margin-top: 12px; }
 
-/* Indirizzi --------------------------------------------------------- */
+/* La ricerca -------------------------------------------------------- */
 
+.search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 9px 10px;
+  padding: 0 10px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--label);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--muted);
+}
+.search:focus-within { box-shadow: inset 0 0 0 1px var(--brand); color: var(--ink); }
+.search svg { flex: none; display: block; }
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search input:focus { outline: none; }
+
+/* L'elenco ---------------------------------------------------------- */
+
+.list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.row:hover { background: var(--label); }
+.row:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.row[aria-selected='true'] { background: var(--label-hover); }
+
+/*
+ * L'iniziale al posto di un'icona uguale per tutti.
+ *
+ * Quattro alias con la stessa icona sono quattro righe indistinguibili finche'
+ * non si legge. L'iniziale della parte locale si riconosce con la coda
+ * dell'occhio, e non costa una richiesta di rete come costerebbe la favicon del
+ * sito, che oltretutto direbbe a qualcun altro quali siti stai guardando.
+ */
+.row__badge {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--label-hover);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 680;
+  text-transform: uppercase;
+}
+.row[aria-selected='true'] .row__badge { background: var(--brand); color: var(--brand-ink); }
+
+.row__text { flex: 1; min-width: 0; }
+.row__title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -.004em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row__sub {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Spento: l'indirizzo resta leggibile, ma si vede che non riceve. */
+.row.is-off .row__title { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+.row.is-off .row__badge { background: var(--label); color: var(--muted); }
+
+/* Il dettaglio ------------------------------------------------------ */
+
+.detail { padding: 16px 18px 18px; }
+
+.detail__head { margin-bottom: 14px; }
+.detail__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 620;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+/*
+ * L'indirizzo, con la linea tratteggiata prima del bottone che copia.
+ *
+ * E' la strappatura di un talloncino, ed e' l'altra meta' del segno in cima
+ * alla finestra: due indizi dello stesso mestiere, la posta, invece di uno
+ * solo. Dice anche una cosa vera, che quella parte si stacca e se ne va
+ * altrove.
+ */
+.address {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 11px 8px 11px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--label);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
 .address__text {
+  flex: 1;
+  min-width: 0;
   font-family: var(--mono);
-  font-size: 13px; letter-spacing: .002em;
+  font-size: 13px;
+  letter-spacing: .002em;
   overflow-wrap: anywhere;
 }
 .address__local { font-weight: 620; color: var(--ink); }
 /*
- * Il dominio non si spezza al suo interno.
- *
- * Con `overflow-wrap: anywhere` sul contenitore, un indirizzo lungo veniva
- * tagliato a metá della parte locale, cioe' esattamente del pezzo che
- * identifica l'alias: "considerable.thunderstor / m7qz@sidegate.org". Tenendo
- * il dominio indivisibile, l'interruzione cade fra le due parti, che e' il
- * punto in cui un indirizzo si legge comunque spezzato.
+ * Il dominio non si spezza al suo interno: con overflow-wrap: anywhere sul
+ * contenitore, un indirizzo lungo veniva tagliato a meta' della parte locale,
+ * cioe' del pezzo che identifica l'alias. Tenendolo indivisibile,
+ * l'interruzione cade fra le due parti.
  */
 .address__domain { color: var(--muted); white-space: nowrap; }
+
+.address .icon-button {
+  margin-left: 4px;
+  padding-left: 10px;
+  width: 40px;
+  border-left: 1px dashed var(--hairline-strong);
+  border-radius: 0;
+}
+.address .icon-button:hover { background: none; color: var(--ink); }
+.address .icon-button[data-done='true'] { color: var(--brand); }
+
+.detail__block { margin-top: 15px; }
+
+.detail__rows { margin-top: 16px; border-top: 1px solid var(--hairline); }
+.detail__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12.5px;
+}
+.detail__row > span:first-child { flex: 1; }
+.detail__value { color: var(--muted); }
+
+.detail__foot { margin-top: 18px; display: flex; justify-content: flex-end; }
+
+/*
+ * Lo stato vuoto e' un invito, non un buco.
+ *
+ * Chi apre il popup senza aver mai creato niente non deve trovare una colonna
+ * grigia: deve trovare scritto cosa succede se preme il bottone che ha davanti.
+ */
+.blank {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+}
+.blank__inner { max-width: 34ch; }
+.blank h2 { font-size: 14px; font-weight: 640; letter-spacing: -.01em; margin-bottom: 5px; }
+.blank p { color: var(--muted); font-size: 12.5px; }
+.blank svg { color: var(--hairline-strong); margin-bottom: 12px; }
+
+/* Interruttore acceso/spento ---------------------------------------- */
+
+.toggle {
+  flex: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hairline-strong);
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper);
+  transition: transform var(--fast) var(--ease);
+}
+.toggle[aria-checked='true'] { background: var(--brand); }
+.toggle[aria-checked='true']::after { transform: translateX(16px); }
+.toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Bottoni ----------------------------------------------------------- */
 
 .button {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; min-height: 42px; padding: 0 14px;
-  border: 0; border-radius: var(--radius-sm);
-  font: inherit; font-size: 13.5px; font-weight: 620; letter-spacing: -.005em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -.005em;
   cursor: pointer;
   transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
@@ -107,185 +374,82 @@ body::before {
 .button--primary:hover:not(:disabled) { background: var(--brand-hover); }
 .button--quiet { background: none; box-shadow: inset 0 0 0 1px var(--hairline-strong); color: var(--ink); }
 .button--quiet:hover { background: var(--label); }
+.button--danger { width: auto; box-shadow: inset 0 0 0 1px var(--alarm); color: var(--alarm); background: none; }
+.button--danger:hover { background: color-mix(in srgb, var(--alarm) 8%, transparent); }
 
 .icon-button {
   flex: none;
-  width: 30px; height: 30px;
-  display: grid; place-items: center;
-  padding: 0; border: 0; border-radius: var(--radius-xs);
-  background: none; color: var(--muted);
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--muted);
   cursor: pointer;
   transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 .icon-button:hover { background: var(--label-hover); color: var(--ink); }
 .icon-button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
-.bar .icon-button { margin-left: auto; }
 
-.row { display: flex; gap: 9px; }
-.row > .button { flex: 1; }
+.row-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.row-actions .button { width: auto; }
 
 /* Campi ------------------------------------------------------------- */
 
 .field { display: block; margin-bottom: 14px; }
-.field__label { display: block; margin-bottom: 5px; font-size: 12.5px; font-weight: 600; }
-.field__hint { display: block; margin-top: 6px; color: var(--muted); font-size: 11.5px; }
+.field__label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 600; }
+.field__hint { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 
 input[type='text'],
-input[type='search'],
 select {
   width: 100%;
-  min-height: 38px; padding: 8px 11px;
-  border: 0; border-radius: var(--radius-sm);
-  background: var(--label);
-  box-shadow: inset 0 0 0 1px var(--hairline);
-  color: var(--ink);
-  font: inherit; font-size: 13px;
-}
-input[type='search'] { -webkit-appearance: none; appearance: none; }
-input:focus-visible, select:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--brand), 0 0 0 3px rgba(15, 94, 86, .16);
-}
-
-.search { margin-bottom: 0; }
-.heading + .list { margin-top: 0; }
-
-/* La bozza: un alias creato ma non ancora confermato ----------------- */
-
-.card {
-  margin-top: 14px; padding: 14px;
-  border-radius: var(--radius);
-  background: var(--label);
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
-.alias {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 12px;
-}
-.alias .address__text { flex: 1; min-width: 0; font-size: 13.5px; }
-.address__inner { display: inline; }
-.alias .icon-button {
-  margin-left: 2px; padding-left: 11px;
-  width: 41px; border-left: 1px dashed var(--hairline-strong); border-radius: 0;
-}
-.alias .icon-button:hover { background: none; }
-
-/* L'elenco ---------------------------------------------------------- */
-
-.list { margin: 0; padding: 0; list-style: none; }
-.list li + li { margin-top: 6px; }
-
-.row-alias {
-  position: relative;
-  display: block;
-  padding: 10px 12px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
   border-radius: var(--radius-sm);
   background: var(--label);
   box-shadow: inset 0 0 0 1px var(--hairline);
-  transition: background-color var(--fast) var(--ease);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
 }
-.row-alias:hover { background: var(--label-hover); }
-
-.row-alias__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.row-alias__top .address__text { flex: 1; min-width: 0; font-size: 12.5px; }
-
-/*
- * Le azioni della riga compaiono avvicinandosi.
- *
- * Con tre bottoni sempre visibili su ogni riga, un elenco di quattro alias
- * mostrava dodici icone: l'occhio non trovava piu' gli indirizzi, che sono la
- * ragione per cui l'elenco esiste. Restano raggiungibili da tastiera, perche'
- * `:focus-within` le tira fuori come il passaggio del mouse: nascondere una
- * cosa a chi non usa il mouse non e' pulizia, e' un difetto.
- */
-/*
- * Le azioni galleggiano sopra la riga.
- *
- * Nel flusso si prendevano un terzo della larghezza anche invisibili, e
- * l'indirizzo si spezzava per fargli posto. Qui non occupano niente finche' non
- * servono, e la sfumatura sotto le stacca dal testo che coprono.
- */
-.row-alias__actions {
-  position: absolute;
-  top: 6px; right: 7px;
-  display: flex; gap: 1px;
-  padding-left: 22px;
-  border-radius: var(--radius-xs);
-  background: linear-gradient(90deg, transparent, var(--label-hover) 40%);
-  opacity: 0;
-  transition: opacity var(--fast) var(--ease);
-}
-.row-alias:hover .row-alias__actions,
-.row-alias:focus-within .row-alias__actions { opacity: 1; }
-
-.row-alias .icon-button {
-  opacity: 0;
-  transition: opacity var(--fast) var(--ease), background-color var(--fast) var(--ease), color var(--fast) var(--ease);
-}
-.row-alias:hover .icon-button,
-.row-alias:focus-within .icon-button { opacity: 1; }
-.row-alias .icon-button:focus-visible { opacity: 1; }
-
-/* Spento: l'indirizzo resta leggibile, ma si vede che non riceve. */
-.row-alias.is-off .address__local,
-.row-alias.is-off .address__domain { color: var(--muted); }
-.row-alias.is-off .address__text { text-decoration: line-through; text-decoration-thickness: 1px; }
-
-.dot {
-  flex: none; width: 7px; height: 7px;
-  border-radius: 50%; background: var(--brand);
-}
-.row-alias.is-off .dot { background: var(--hairline-strong); }
-
-.row-alias__note {
-  display: block;
-  margin: 3px 0 0; padding: 0; border: 0; background: none;
-  color: var(--muted); font: inherit; font-size: 11.5px;
-  text-align: left; cursor: text;
-}
-.row-alias__note:hover { color: var(--ink); }
-.row-alias__note-input {
-  margin-top: 4px;
-  min-height: 30px; padding: 5px 8px; font-size: 11.5px;
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--brand);
 }
 
-.row-alias__confirm {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 9px; padding-top: 9px;
-  border-top: 1px dashed var(--hairline-strong);
-  font-size: 11.5px; color: var(--muted);
-}
-.row-alias__confirm span { flex: 1; }
+/* Impostazioni ------------------------------------------------------ */
 
-.mini {
-  padding: 5px 11px;
-  border: 0; border-radius: 999px;
-  background: none; box-shadow: inset 0 0 0 1px var(--hairline-strong);
-  color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 620;
-  cursor: pointer;
-}
-.mini:hover { background: var(--label-hover); }
-.mini--danger { box-shadow: inset 0 0 0 1px var(--alarm); color: var(--alarm); }
-.mini:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
-
-/* Interruttori ------------------------------------------------------ */
+.settings { padding: 14px 16px 16px; }
+.settings + .settings { border-left: 1px solid var(--hairline); }
 
 .switch {
-  display: flex; align-items: flex-start; gap: 11px;
-  padding: 11px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--hairline);
   cursor: pointer;
 }
 .switch:last-of-type { border-bottom: 0; }
-.switch input { margin: 2px 0 0; accent-color: var(--brand); width: 16px; height: 16px; flex: none; }
+.switch input { margin: 2px 0 0; accent-color: var(--brand); width: 15px; height: 15px; flex: none; }
 .switch strong { display: block; font-size: 12.5px; font-weight: 600; }
-.switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11.5px; }
+.switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 
-/* Attesa ------------------------------------------------------------ */
+/* Varie ------------------------------------------------------------- */
+
+.error { margin-top: 8px; color: var(--alarm); font-size: 11.5px; }
+.empty { padding: 14px 12px; color: var(--muted); font-size: 12px; }
 
 .spinner {
-  width: 15px; height: 15px; flex: none;
-  border: 2px solid rgba(127, 127, 127, .28);
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid rgba(127, 127, 127, .3);
   border-top-color: currentColor;
   border-radius: 50%;
   animation: spin .7s linear infinite;
@@ -293,9 +457,15 @@ input:focus-visible, select:focus-visible {
 @keyframes spin { to { transform: rotate(360deg) } }
 
 .sr-only {
-  position: absolute; width: 1px; height: 1px;
-  padding: 0; margin: -1px; overflow: hidden;
-  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
