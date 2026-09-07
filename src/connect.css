@@ -10,11 +10,34 @@
  * dentro le pagine: e' lo stesso prodotto e deve sembrarlo.
  */
 
+/*
+ * Questa pagina prende popup.css per avere gli stessi bottoni e gli stessi
+ * campi, e si porta dietro anche la misura fissa del popup: 600 per 430 con
+ * `overflow: hidden`. In una scheda quella misura non c'entra niente, e un
+ * passaggio piu' alto della finestra verrebbe tagliato senza barra di
+ * scorrimento. Qui si disfa, sull'elemento radice e non solo sul corpo, perche'
+ * l'altezza fissa sta su tutti e due.
+ */
+html:has(body.connect) {
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
 body.connect {
   width: auto;
+  height: auto;
+  overflow: visible;
   min-height: 100vh;
   padding: 56px 20px;
   display: flex;
+  /*
+   * In riga, esplicitamente. popup.css mette `flex-direction: column` sul
+   * corpo, e questa pagina eredita anche quello: in colonna `justify-content`
+   * centra in verticale e `align-self: flex-start` del foglio diventa "a
+   * sinistra", cioe' il contrario di quello che si legge qui sotto.
+   */
+  flex-direction: row;
   justify-content: center;
   background: var(--sunken);
 }
