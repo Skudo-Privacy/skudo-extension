@@ -36,6 +36,51 @@
         </p>
       </section>
 
+      <!--
+        L'icona nei campi, chiesta prima a parole e poi al browser.
+
+        L'ordine non e' un vezzo. La finestra del browser che chiede
+        "consentire l'accesso ai dati di tutti i siti?" e' spaventosa e non
+        dice a cosa serve: chi la vede senza contesto risponde no, e risponde
+        no per sempre, perche' quella finestra non ricompare da sola. Prima si
+        mostra cosa fa, con l'immagine di un campo e l'icona dentro, e poi si
+        chiede. Chi arriva alla finestra del browser sa gia' cosa sta
+        approvando.
+
+        E' l'unica cosa dell'estensione che ha bisogno di leggere le pagine, ed
+        e' scritto qui invece che nascosto: chi dice di no ha comunque
+        l'estensione intera, meno l'icona.
+      -->
+      <section id="step-icon" class="step" hidden>
+        <h1>One last thing</h1>
+        <p class="lede">
+          Skudo can put a small mark inside email fields, so you can make an
+          alias without leaving the page.
+        </p>
+
+        <div class="preview" aria-hidden="true">
+          <span class="preview__label">Email</span>
+          <span class="preview__field">
+            <span class="preview__text">you@</span>
+            <span class="preview__caret"></span>
+            <img class="preview__mark" src="img/icon_32.png" width="18" height="18" alt="" />
+          </span>
+        </div>
+
+        <ul class="points">
+          <li>To do it, Firefox will ask you to allow Skudo on the sites you visit.</li>
+          <li>Nothing about those pages is sent anywhere. The mark is drawn locally.</li>
+          <li>You can turn it off, or say no now and turn it on later in settings.</li>
+        </ul>
+
+        <p class="error" id="icon-error" hidden></p>
+
+        <div class="row-buttons">
+          <button type="button" id="icon-yes" class="button button--primary">Turn it on</button>
+          <button type="button" id="icon-no" class="button button--quiet">Not now</button>
+        </div>
+      </section>
+
       <!-- Fatto -->
       <section id="step-done" class="step" hidden>
         <div class="tick" aria-hidden="true">

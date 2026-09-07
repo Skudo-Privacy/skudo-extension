@@ -98,3 +98,98 @@ body.connect {
   background: var(--signal);
   color: #16210a;
 }
+
+/*
+ * L'immagine del campo con l'icona dentro.
+ *
+ * Serve a rispondere alla domanda che il browser sta per fare in modo
+ * spaventoso e senza contesto ("consentire l'accesso ai dati di tutti i siti?")
+ * mostrando la cosa vera: un campo email con un segno dentro. Non e' una
+ * schermata di prodotto ne' un'illustrazione: e' il pezzo di interfaccia che
+ * comparira' davvero, disegnato in scala.
+ */
+.preview {
+  margin: 20px 0 4px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  text-align: left;
+}
+
+.preview__label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.preview__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 40px 0 12px;
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* Il cursore che lampeggia dice "questo campo e' quello attivo", che e'
+   esattamente il momento in cui il segno compare. */
+.preview__caret {
+  width: 1px;
+  height: 15px;
+  margin-left: 1px;
+  background: var(--ink);
+  animation: skudo-caret 1.1s steps(1) infinite;
+}
+@keyframes skudo-caret { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .preview__caret { animation: none; }
+}
+
+.preview__mark {
+  position: absolute;
+  right: 10px;
+  border-radius: 4px;
+}
+
+.points {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.points li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+/* Un trattino, non un pallino: e' un elenco di fatti, non una lista della
+   spesa, e il pallino pieno tira l'occhio piu' del testo. */
+.points li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 9px;
+  width: 8px;
+  height: 1.5px;
+  background: var(--hairline-strong);
+}
+
+.row-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+/* Il rifiuto ha la stessa dimensione dell'accettazione. Un "non ora" piccolo e
+   grigio accanto a un bottone grande e' una scelta finta. */
+.row-buttons .button { flex: 1; }

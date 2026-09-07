@@ -25,9 +25,13 @@ function loadPopupMarkup() {
 }
 
 const ALIASES = [
-  { id: 'a1', email: 'quiet.pine8x@skudo.me', description: 'example.com', active: true },
-  { id: 'a2', email: 'lone.harbour2k@skudo.me', description: '', active: false },
+  { id: 'a1', email: 'quiet.pine8x@skudo.me', description: 'example.com', site: 'example.com', active: true },
+  { id: 'a2', email: 'lone.harbour2k@skudo.me', description: '', site: '', active: false },
 ]
+
+/** Un PNG di un pixel, per non inventare byte. */
+const PIXEL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
 function fakeChrome(overrides = {}) {
   const handlers = {
@@ -37,6 +41,8 @@ function fakeChrome(overrides = {}) {
       injectIcon: false,
       contextMenu: true,
       describeWithSite: true,
+      associateSite: true,
+      siteIcons: true,
       theme: 'auto',
       signedIn: true,
     }),
@@ -47,6 +53,9 @@ function fakeChrome(overrides = {}) {
     SET_ALIAS_ACTIVE: ({ id, active }) => ({ id, active }),
     UPDATE_ALIAS: ({ id }) => ({ id }),
     DELETE_ALIAS: ({ id }) => ({ id }),
+    SITE_ICONS: () => ({ 'example.com': PIXEL }),
+    COOLDOWN_STATE: () => ({ remaining: 0, label: '' }),
+    SET_SETTINGS: ({ patch }) => patch,
     ...overrides,
   }
 
@@ -237,6 +246,69 @@ describe('il popup', () => {
     expect(document.querySelectorAll('#alias-list .row')).toHaveLength(1)
   })
 
+  it('mette l icona del sito accanto agli alias che ne hanno uno', async () => {
+    await startPopup()
+    // Le icone arrivano dopo il primo disegno: si lascia sfilare la coda.
+    await settle()
+
+    const badges = document.querySelectorAll('#alias-list .row__badge')
+    const withIcon = badges[0]
+
+    expect(withIcon.dataset.site).toBe('example.com')
+    expect(withIcon.querySelector('img')?.getAttribute('src')).toBe(PIXEL)
+    expect(withIcon.classList.contains('has-icon')).toBe(true)
+  })
+
+  it('senza icona resta la lettera, non un quadrato vuoto', async () => {
+    await startPopup({ SITE_ICONS: () => ({}) })
+    await settle()
+
+    const badge = document.querySelector('#alias-list .row__badge')
+
+    expect(badge.querySelector('img')).toBeNull()
+    expect(badge.textContent).toBe('q')
+    expect(badge.classList.contains('has-icon')).toBe(false)
+  })
+
+  it("l icona non si chiede mai a un sito, ma solo al contesto di sfondo", async () => {
+    // Il difetto che questa prova impedisce e' quello che fanno quasi tutti:
+    // chiedere `https://sito/favicon.ico`, cioe' annunciare a ogni sito che
+    // qualcuno sta guardando la propria lista di iscrizioni.
+    const fetchSpy = vi.fn()
+    globalThis.fetch = fetchSpy
+
+    const fake = await startPopup()
+    await settle()
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(fake.sent).toContainEqual({ type: 'SITE_ICONS', sites: ['example.com'] })
+  })
+
+  it("durante l attesa il bottone dice quanto manca invece di fallire", async () => {
+    await startPopup({ COOLDOWN_STATE: () => ({ remaining: 6200, label: 'Ready in 7s' }) })
+    await settle()
+
+    const button = document.getElementById('create')
+
+    expect(button.disabled).toBe(true)
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.querySelector('.button__label').textContent).toBe('Ready in 7s')
+    expect(document.getElementById('create-wait').hidden).toBe(false)
+    // L'attesa non e' un errore, e non finisce nella riga degli errori.
+    expect(document.getElementById('create-error').hidden).toBe(true)
+  })
+
+  it('senza attesa il bottone e aperto e non nomina nessun conto', async () => {
+    await startPopup()
+    await settle()
+
+    const button = document.getElementById('create')
+
+    expect(button.disabled).toBe(false)
+    expect(button.querySelector('.button__label').textContent).toBe('Create an alias')
+    expect(document.getElementById('create-wait').hidden).toBe(true)
+  })
+
   it('senza account collegato mostra la schermata di collegamento', async () => {
     await startPopup({
       GET_STATE: () => ({
@@ -245,6 +317,8 @@ describe('il popup', () => {
         injectIcon: false,
         contextMenu: true,
         describeWithSite: true,
+        associateSite: true,
+        siteIcons: true,
         theme: 'auto',
         signedIn: false,
       }),

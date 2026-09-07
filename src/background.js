@@ -10,6 +10,9 @@
 import { ApiError, SkudoApi, aliasEmail } from './shared/api.js'
 import { api } from './shared/browser.js'
 import { INSTANCE } from './shared/config.js'
+import * as cooldown from './shared/cooldown.js'
+import { registrableDomain, siteFromUrl } from './shared/domain.js'
+import { forgetIcons, resolveIcons } from './shared/icons.js'
 import { forgetSecret, rememberSecret, readSecret } from './shared/pairing.js'
 import { clearToken, getSettings, getToken, setSettings, setToken } from './shared/storage.js'
 
@@ -88,6 +91,32 @@ async function forgetSessionAlias(id) {
   await undoStore().set({ [SESSION_ALIAS_KEY]: kept })
 }
 
+/**
+ * Il ritmo di creazione, tenuto qui e non nella finestra che lo mostra.
+ *
+ * Il popup si chiude appena si guarda un'altra scheda, e il pannello dentro le
+ * pagine muore quando la pagina cambia. Se il conteggio vivesse li', chiudere e
+ * riaprire azzererebbe il freno, cioe' lo toglierebbe proprio a chi sta
+ * premendo piu' volte.
+ *
+ * `storage.session` e non `local`: e' uno stato di questo avvio del browser,
+ * non qualcosa da scrivere sul disco.
+ */
+const COOLDOWN_KEY = 'createCooldown'
+
+async function cooldownState() {
+  const { [COOLDOWN_KEY]: state = cooldown.EMPTY } = await undoStore().get({
+    [COOLDOWN_KEY]: cooldown.EMPTY,
+  })
+  return state
+}
+
+async function noteCreation() {
+  const next = cooldown.afterCreate(await cooldownState(), Date.now())
+  await undoStore().set({ [COOLDOWN_KEY]: next })
+  return next
+}
+
 /** Costruisce il client leggendo token e impostazioni al momento dell'uso. */
 async function client() {
   return new SkudoApi({ token: await getToken() })
@@ -96,19 +125,12 @@ async function client() {
 /**
  * Il nome del sito, per la descrizione dell'alias.
  *
- * Si tiene il dominio registrabile senza `www`, che è quello che l'utente
- * riconosce. Niente libreria delle suffix pubbliche: addy.io ne carica una
- * (`psl`, circa 100KB) per fare essenzialmente questo. Per una descrizione
- * leggibile e per una ricerca non serve la precisione sui domini a due livelli
- * tipo `co.uk`: al massimo la descrizione dice `example.co.uk` invece di
- * `example`, che è comunque giusta.
+ * Si tiene l'host senza `www`, che è quello che l'utente riconosce. Il dominio
+ * registrabile, che è un'altra cosa e serve al legame tecnico, lo calcola
+ * src/shared/domain.js.
  */
 function siteName(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return ''
-  }
+  return siteFromUrl(url).host
 }
 
 /**
@@ -126,17 +148,45 @@ async function createAlias({ site = '', fresh = false } = {}) {
     if (existing) return { ...existing, reused: true }
   }
 
+  // Il freno. Sta prima della chiamata e non dentro l'interfaccia perche' i
+  // punti da cui si crea un alias sono quattro (il popup, il pannello nelle
+  // pagine, il menu contestuale, la scorciatoia da tastiera) e ognuno di loro
+  // avrebbe dimenticato di controllarlo almeno una volta.
+  //
+  // Un alias riusato non passa di qui: non e' una creazione.
+  const waiting = cooldown.remaining(await cooldownState(), Date.now())
+
+  if (waiting > 0) {
+    throw new ApiError(cooldown.describe(await cooldownState(), Date.now()), {
+      code: 'COOLDOWN',
+      retryAfter: waiting,
+    })
+  }
+
   const settings = await getSettings()
   const skudo = await client()
+
+  // Il legame tecnico con il sito, se l'utente lo vuole. `site` arriva come
+  // host completo; la radice serve al server per riconoscere che
+  // `accounts.esempio.com` e `esempio.com` sono lo stesso posto.
+  const root = settings.associateSite ? registrableDomain(site) : ''
 
   const alias = await skudo.createAlias({
     domain: settings.domain,
     format: settings.format,
     description: settings.describeWithSite && site ? site : '',
+    site: root ? site : '',
+    siteRoot: root,
   })
 
-  const created = { id: alias.id, email: aliasEmail(alias), description: alias.description || '' }
+  const created = {
+    id: alias.id,
+    email: aliasEmail(alias),
+    description: alias.description || '',
+    site: alias.site || (root ? site : ''),
+  }
 
+  await noteCreation()
   await rememberUndoable(created.id)
   await rememberSessionAlias(site, created)
 
@@ -149,6 +199,9 @@ function describeAlias(alias) {
     id: alias.id,
     email: aliasEmail(alias),
     description: alias.description || '',
+    // Il sito serve a due cose sole: mostrarne l'icona e dire a chi guarda
+    // l'elenco dove ha usato quell'indirizzo.
+    site: alias.site || '',
     active: alias.active !== false,
     createdAt: alias.created_at || '',
   }
@@ -165,6 +218,7 @@ async function aliasesForSite(site) {
       id: alias.id,
       email: aliasEmail(alias),
       description: alias.description || '',
+      site: alias.site || '',
     }))
 }
 
@@ -203,6 +257,43 @@ const handlers = {
 
   async ALIASES_FOR_SITE({ site }) {
     return aliasesForSite(typeof site === 'string' ? site.slice(0, 253) : '')
+  },
+
+  /**
+   * Quanto manca prima di poter creare un altro alias.
+   *
+   * Lo chiedono il popup all'apertura e il pannello quando compare, perche' il
+   * conteggio vive qui: vedi COOLDOWN_KEY. Restituisce anche le soglie, cosi'
+   * chi disegna non le ricopia.
+   */
+  async COOLDOWN_STATE() {
+    const state = await cooldownState()
+    const now = Date.now()
+
+    return {
+      remaining: cooldown.remaining(state, now),
+      label: cooldown.describe(state, now),
+    }
+  },
+
+  /**
+   * Le icone dei siti, come `data:`.
+   *
+   * Solo dalle nostre pagine. Un content script che potesse chiederle
+   * scoprirebbe, dalla differenza fra una risposta immediata e una lenta, quali
+   * icone sono gia' nella cache: cioe' dove l'utente ha degli alias. E' un
+   * canale stretto e indiretto, e non c'e' motivo di lasciarlo aperto, perche'
+   * il pannello dentro le pagine le icone non le disegna.
+   */
+  async SITE_ICONS({ sites }, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+
+    const { siteIcons } = await getSettings()
+    if (!siteIcons) return {}
+
+    const wanted = (Array.isArray(sites) ? sites : []).filter((site) => typeof site === 'string')
+
+    return resolveIcons(wanted)
   },
 
   /**
@@ -353,7 +444,11 @@ const handlers = {
 
     await clearToken()
     await forgetSecret(api)
-    await undoStore().remove([SESSION_ALIAS_KEY, UNDOABLE_KEY])
+    await undoStore().remove([SESSION_ALIAS_KEY, UNDOABLE_KEY, COOLDOWN_KEY])
+    // Le icone se ne vanno con l'account: sono l'elenco dei posti dove
+    // quell'account aveva degli alias, e restare sul disco dopo un'uscita e'
+    // esattamente quello che una persona non si aspetta.
+    await forgetIcons()
     // Con l'accesso va via anche l'icona nelle pagine: lasciarla attiva
     // significherebbe continuare a leggere ogni pagina per un'estensione che
     // non può più fare niente.
@@ -361,7 +456,12 @@ const handlers = {
     return { signedIn: false }
   },
 
-  async SET_SETTINGS({ patch }) {
+  async SET_SETTINGS({ patch }, sender) {
+    // Solo dalle nostre pagine. Un content script che potesse scrivere qui
+    // cambierebbe il dominio su cui si creano gli alias, o si toglierebbe
+    // dall'elenco dei siti messi in pausa: due cose che un sito vorrebbe fare
+    // e che non deve poter fare.
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
     return setSettings(patch)
   },
 
@@ -385,7 +485,7 @@ const handlers = {
     const term = typeof query === 'string' ? query.trim().slice(0, 100) : ''
     if (!term) return handlers.RECENT_ALIASES({}, sender)
     const skudo = await client()
-    const aliases = await skudo.findAliasesForSite(term)
+    const aliases = await skudo.searchAliases(term)
     return aliases.map(describeAlias)
   },
 
@@ -436,7 +536,14 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handler(message, sender)
     .then((data) => sendResponse({ ok: true, data }))
     .catch((error) =>
-      sendResponse({ ok: false, error: error.message, code: error.code || 'ERROR' })
+      sendResponse({
+        ok: false,
+        error: error.message,
+        code: error.code || 'ERROR',
+        // Quando c'e' un'attesa, quanto manca. Chi ha chiesto disegna un
+        // bottone che si riapre da solo invece di un errore.
+        retryAfter: error.retryAfter || 0,
+      })
     )
 
   // true: la risposta arriva dopo, il canale resta aperto.

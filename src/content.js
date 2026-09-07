@@ -465,6 +465,52 @@ function offerCreate(entry, menu, { firstTime = false }) {
   ])
 }
 
+/**
+ * L'attesa fra un alias e il successivo, dentro il pannello.
+ *
+ * Non e' una schermata di errore e non deve sembrarlo: la riga resta dov'era,
+ * cambia sottotitolo, e quando il tempo e' finito torna da sola a essere il
+ * bottone che era. Chi aspetta non deve premere niente per riprovare.
+ *
+ * Il conteggio si rilegge dal contesto di sfondo a ogni giro invece di
+ * scorrere qui: e' lo stesso freno che vede il popup, e due conti separati
+ * finirebbero per dire due numeri diversi nella stessa finestra.
+ */
+async function showCooldown(entry, menu, resume) {
+  const handles = menu.show('Email address', [
+    {
+      name: 'wait',
+      icon: menu.icons.mask,
+      title: 'Hide my email',
+      sub: 'Just a moment',
+      disabled: true,
+    },
+  ])
+
+  const handle = handles.get('wait')
+
+  const tick = async () => {
+    // Il menu puo' essere stato chiuso nel frattempo: senza questo controllo il
+    // temporizzatore continuerebbe a girare per tutta la vita della pagina.
+    if (!entry.menu) return
+
+    const response = await send('COOLDOWN_STATE')
+    const state = response?.ok ? response.data : { remaining: 0, label: '' }
+
+    if (!entry.menu) return
+
+    if (state.remaining <= 0) {
+      resume()
+      return
+    }
+
+    menu.replaceSub(handle, state.label)
+    setTimeout(tick, (state.remaining % 1000) + 60)
+  }
+
+  tick()
+}
+
 async function create(entry, menu, { fresh = false }) {
   const handles = menu.show('Email address', [
     {
@@ -482,6 +528,13 @@ async function create(entry, menu, { fresh = false }) {
   entry.icon.setBusy(false)
 
   if (!entry.menu) return
+
+  // L'attesa non e' un guasto: non finisce nella riga rossa degli errori, si
+  // trasforma in un conto alla rovescia che riapre da solo il bottone.
+  if (response?.code === 'COOLDOWN') {
+    return showCooldown(entry, menu, () => offerCreate(entry, menu, {}))
+  }
+
   if (!response?.ok) return showFailure(entry, response, { retry: () => create(entry, menu, { fresh }) })
 
   void handles

@@ -20,6 +20,7 @@
 
 import { addressNode } from './shared/address.js'
 import { api } from './shared/browser.js'
+import { registrableDomain } from './shared/domain.js'
 
 /**
  * Attesa minima prima di mostrare il risultato della creazione.
@@ -49,6 +50,20 @@ let searchTimer = null
 
 /** L'ultima richiesta vinta: vedi la guardia contro le risposte in ritardo. */
 let listRequest = 0
+
+/**
+ * Le icone gia' risolte, per dominio registrabile.
+ *
+ * Vive per l'apertura del popup e basta: la cache vera sta nel contesto di
+ * sfondo (src/shared/icons.js), qui c'e' solo quello che serve a non chiedere
+ * due volte la stessa cosa mentre la finestra e' aperta.
+ *
+ * @type {Record<string, string|null>}
+ */
+let icons = {}
+
+/** Il temporizzatore che ridisegna il bottone durante l'attesa. */
+let waitTimer = null
 
 /* ------------------------------------------------------------------ *
  * Messaggi
@@ -135,10 +150,22 @@ function aliasRow(alias) {
   button.setAttribute('aria-selected', String(alias.id === selectedId))
   button.dataset.id = alias.id
 
+  // Il segno a sinistra: l'icona del sito quando c'e', la prima lettera
+  // dell'indirizzo quando non c'e'.
+  //
+  // La lettera non e' un ripiego provvisorio ed e' scritta comunque, sotto
+  // l'icona: un'icona che non arriva (rete assente, sito senza favicon,
+  // interruttore spento) lascia altrimenti un quadrato vuoto, e un elenco di
+  // quadrati vuoti e' peggio di un elenco di lettere.
   const badge = document.createElement('span')
   badge.className = 'row__badge'
   badge.textContent = localPart(alias.email).charAt(0)
   badge.setAttribute('aria-hidden', 'true')
+
+  const root = registrableDomain(alias.site || '')
+  if (root) badge.dataset.site = root
+  paintBadge(badge, root)
+
   button.appendChild(badge)
 
   const text = document.createElement('span')
@@ -159,6 +186,56 @@ function aliasRow(alias) {
 
   item.appendChild(button)
   return item
+}
+
+/**
+ * Mette l'icona dentro un segno, se l'abbiamo.
+ *
+ * L'immagine e' un `data:` e non un indirizzo: se fosse un indirizzo, sarebbe
+ * il browser a scaricarla di nuovo a ogni ridisegno. Vedi src/shared/icons.js.
+ */
+function paintBadge(badge, root) {
+  const data = root ? icons[root] : null
+
+  badge.querySelector('img')?.remove()
+  badge.classList.toggle('has-icon', Boolean(data))
+
+  if (!data) return
+
+  const image = document.createElement('img')
+  image.src = data
+  image.alt = ''
+  image.width = 18
+  image.height = 18
+  badge.appendChild(image)
+}
+
+/**
+ * Chiede le icone di tutta la lista, in una volta sola.
+ *
+ * In una volta e non al passaggio del mouse: un caricamento pigro sarebbe piu'
+ * efficiente e direbbe, a chi guarda il traffico, su quale riga si e' fermato
+ * l'utente. Vedi il commento in cima a src/shared/icons.js.
+ */
+async function loadIcons() {
+  if (!settings?.siteIcons) return
+
+  const sites = aliases.map((alias) => alias.site).filter(Boolean)
+  if (sites.length === 0) return
+
+  let resolved = {}
+  try {
+    resolved = await send('SITE_ICONS', { sites })
+  } catch {
+    // Nessuna icona non e' un guasto: restano le lettere.
+    return
+  }
+
+  icons = { ...icons, ...resolved }
+
+  for (const badge of document.querySelectorAll('.row__badge[data-site]')) {
+    paintBadge(badge, badge.dataset.site)
+  }
 }
 
 function renderList() {
@@ -205,6 +282,7 @@ async function loadList() {
   if (!aliases.some((alias) => alias.id === selectedId)) selectedId = null
   renderList()
   renderDetail()
+  loadIcons()
 }
 
 function select(id) {
@@ -456,6 +534,65 @@ function formatDate(value) {
  * Creazione
  * ------------------------------------------------------------------ */
 
+/**
+ * L'attesa fra un alias e il successivo, disegnata.
+ *
+ * ## Perche' il bottone non sparisce e non lampeggia
+ *
+ * Un bottone che scompare per sette secondi fa credere di aver rotto qualcosa.
+ * Un bottone che resta identico e rifiuta il clic e' peggio ancora: sembra
+ * guasto. Qui il bottone resta dov'e', dice quanto manca, e si riapre da solo.
+ * Chi aspetta non deve fare niente e non deve chiedersi niente.
+ *
+ * ## Perche' il tempo si ricalcola invece di scorrere
+ *
+ * Ogni giro rilegge quanto manca dal contesto di sfondo invece di sottrarre un
+ * secondo a una variabile. Un conto alla rovescia locale si scolla dalla realta'
+ * appena il computer va in sospensione, e i browser rallentano di proposito i
+ * temporizzatori delle finestre in secondo piano: il popup riaperto mostrerebbe
+ * un numero inventato.
+ *
+ * ## Perche' lo stato non e' del popup
+ *
+ * Il popup si chiude appena si guarda un'altra scheda. Se il conteggio vivesse
+ * qui, chiudere e riaprire azzererebbe il freno, cioe' lo toglierebbe proprio a
+ * chi sta premendo piu' volte.
+ */
+async function refreshWait() {
+  clearTimeout(waitTimer)
+
+  const button = $('create')
+  const label = button.querySelector('.button__label')
+  const ring = $('create-wait')
+
+  let state = { remaining: 0, label: '' }
+  try {
+    state = await send('COOLDOWN_STATE')
+  } catch {
+    // Senza risposta si lascia il bottone aperto: il freno vero e' comunque
+    // sul server, e bloccarlo qui per un messaggio perso sarebbe un danno
+    // gratuito.
+  }
+
+  if (state.remaining <= 0) {
+    button.disabled = false
+    button.removeAttribute('aria-disabled')
+    label.textContent = 'Create an alias'
+    ring.hidden = true
+    showError('')
+    return
+  }
+
+  button.disabled = true
+  button.setAttribute('aria-disabled', 'true')
+  label.textContent = state.label
+  ring.hidden = false
+
+  // Si riprende all'inizio del secondo successivo, non fra mille millisecondi
+  // esatti: cosi' il numero cambia quando cambia davvero, invece di scivolare.
+  waitTimer = setTimeout(refreshWait, (state.remaining % 1000) + 60)
+}
+
 async function create() {
   const button = $('create')
   const label = button.querySelector('.button__label')
@@ -478,15 +615,18 @@ async function create() {
     selectedId = alias.id
     renderList()
     renderDetail()
+    loadIcons()
     // La nota e' l'unica cosa che resta da decidere: si parte da li'.
     $('detail-note')?.focus()
   } catch (error) {
-    showError(error.message)
+    // L'attesa non e' un errore: non si scrive in rosso, si mostra sul bottone.
+    if (error.code !== 'COOLDOWN') showError(error.message)
     if (error.code === 'UNAUTHENTICATED') show('signin')
   } finally {
-    button.disabled = false
-    label.textContent = 'Create an alias'
     spinner.hidden = true
+    // Chi decide se il bottone e' aperto e' il freno, non questa funzione:
+    // riaprirlo qui e poi richiuderlo lo farebbe sfarfallare.
+    await refreshWait()
   }
 }
 
@@ -565,6 +705,8 @@ async function init() {
 
   $('opt-menu').checked = settings.contextMenu
   $('opt-describe').checked = settings.describeWithSite
+  $('opt-associate').checked = settings.associateSite
+  $('opt-icons').checked = settings.siteIcons
   $('opt-format').value = settings.format
   $('opt-theme').value = settings.theme
   $('opt-inject').checked =
@@ -581,6 +723,7 @@ async function init() {
 
   await loadList()
   loadDomains(settings.domain)
+  refreshWait()
 }
 
 /* Eventi ------------------------------------------------------------ */
@@ -618,6 +761,15 @@ $('search').addEventListener('input', () => {
 $('opt-inject').addEventListener('change', onInjectToggle)
 $('opt-menu').addEventListener('change', (e) => patch('contextMenu', e.target.checked))
 $('opt-describe').addEventListener('change', (e) => patch('describeWithSite', e.target.checked))
+$('opt-associate').addEventListener('change', (e) => patch('associateSite', e.target.checked))
+$('opt-icons').addEventListener('change', async (e) => {
+  await patch('siteIcons', e.target.checked)
+  // Spegnendolo le icone gia' disegnate devono sparire subito: un interruttore
+  // che ha effetto solo alla prossima apertura sembra non aver funzionato.
+  if (!e.target.checked) icons = {}
+  renderList()
+  loadIcons()
+})
 $('opt-domain').addEventListener('change', (e) => patch('domain', e.target.value))
 $('opt-format').addEventListener('change', (e) => patch('format', e.target.value))
 $('opt-theme').addEventListener('change', (e) => {

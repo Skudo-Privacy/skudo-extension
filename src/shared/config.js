@@ -26,3 +26,17 @@
 
 /** Il server a cui questa versione parla. Sostituito da esbuild. */
 export const INSTANCE = __SKUDO_INSTANCE__.replace(/\/+$/, '')
+
+/**
+ * Da dove si prendono le icone dei siti.
+ *
+ * Un indirizzo a parte, e non `INSTANCE` piu' un percorso, perche' la
+ * differenza e' sostanziale: a questo si parla **senza token**. Una richiesta
+ * autenticata direbbe "l'utente X ha un alias per il sito Y", cioe'
+ * ricostruirebbe lato server la mappa che il resto del sistema esiste per non
+ * costruire.
+ *
+ * Chi distribuisce la propria versione lo punta dove vuole, o lo lascia
+ * sull'applicazione: `SKUDO_ICONS_URL=https://static.esempio/icone npm run build`.
+ */
+export const ICONS_URL = __SKUDO_ICONS__.replace(/\/+$/, '')

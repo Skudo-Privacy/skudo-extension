@@ -61,9 +61,16 @@
         <div class="pane__foot">
           <button type="button" id="create" class="button button--primary">
             <span class="spinner" hidden></span>
+            <!-- L'anello che si svuota durante l'attesa fra un alias e il
+                 successivo. Decorativo: quello che conta lo dice l'etichetta,
+                 che cambia testo. -->
+            <span class="button__wait" id="create-wait" hidden aria-hidden="true"></span>
             <span class="button__label">Create an alias</span>
           </button>
-          <p class="error" id="create-error" hidden></p>
+          <!-- `polite` e non `assertive`: l'attesa non e' un allarme, e chi usa
+               un lettore di schermo non deve essere interrotto a ogni secondo
+               che passa. -->
+          <p class="error" id="create-error" role="status" aria-live="polite" hidden></p>
         </div>
       </div>
 
@@ -96,6 +103,22 @@
           <span>
             <strong>Note the site on each alias</strong>
             <small>So your alias list says where each one went.</small>
+          </span>
+        </label>
+
+        <label class="switch">
+          <input type="checkbox" id="opt-associate" />
+          <span>
+            <strong>Remember which site each alias belongs to</strong>
+            <small>Lets Skudo offer the alias you already made here instead of another one.</small>
+          </span>
+        </label>
+
+        <label class="switch">
+          <input type="checkbox" id="opt-icons" />
+          <span>
+            <strong>Show site icons</strong>
+            <small>Fetched once through Skudo, so no site learns you looked.</small>
           </span>
         </label>
       </div>

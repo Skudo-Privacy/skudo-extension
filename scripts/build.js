@@ -33,9 +33,22 @@ await mkdir(out, { recursive: true })
  */
 const instance = process.env.SKUDO_INSTANCE || 'https://app.skudo.org'
 
+/**
+ * Da dove si prendono le icone dei siti.
+ *
+ * Separato dall'indirizzo dell'API perche' e' proprio il punto: le icone si
+ * chiedono senza token, e su un host che non ha cookie di nessuno. Chi
+ * distribuisce una propria versione e non ha un host statico separato lascia il
+ * valore com'e', e le prende dalla stessa applicazione.
+ */
+const icons = process.env.SKUDO_ICONS_URL || `${instance}/icons`
+
 const options = {
   bundle: true,
-  define: { __SKUDO_INSTANCE__: JSON.stringify(instance) },
+  define: {
+    __SKUDO_INSTANCE__: JSON.stringify(instance),
+    __SKUDO_ICONS__: JSON.stringify(icons),
+  },
   format: 'iife',
   target: ['firefox115', 'chrome115'],
   minify: production,
@@ -114,4 +127,5 @@ if (watch) {
   )
   console.log(sizes.join('\n'))
   console.log(`\n  server        ${instance}`)
+  console.log(`  icone         ${icons}`)
 }

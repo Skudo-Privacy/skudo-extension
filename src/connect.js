@@ -110,7 +110,60 @@ async function finish(username) {
   $('done-body').textContent = username
     ? `Signed in as ${username}. You can close this tab.`
     : 'You can close this tab.'
-  show('done')
+
+  // Prima di dire "fatto", si chiede l'unica cosa che ha bisogno di un
+  // permesso. Qui e non nelle impostazioni perche' e' adesso che la persona sta
+  // guardando: un interruttore in una schermata che nessuno apre non verra'
+  // mai acceso, e l'icona nei campi e' meta' del prodotto.
+  await offerFieldIcon()
+}
+
+/**
+ * Chiede il permesso per l'icona nei campi: prima a parole, poi al browser.
+ *
+ * Salta il passaggio se il permesso c'e' gia' (per esempio a un secondo
+ * collegamento): chiedere di nuovo una cosa gia' concessa fa dubitare che la
+ * prima volta sia servita a qualcosa.
+ */
+async function offerFieldIcon() {
+  let granted = false
+  try {
+    granted = await api.permissions.contains({ origins: ['<all_urls>'] })
+  } catch {
+    granted = false
+  }
+
+  if (granted) return show('done')
+
+  show('icon')
+}
+
+/**
+ * Il si'.
+ *
+ * Nessun `await` prima di `permissions.request()`, ed e' obbligatorio: su
+ * Gecko quella chiamata vale solo dentro il gestore di un gesto dell'utente, e
+ * aspettare una promessa prima fa scadere il gesto. La richiesta verrebbe
+ * rifiutata senza che a nessuno venga chiesto niente, il che assomiglia
+ * moltissimo a un rifiuto dell'utente e non lo e'.
+ */
+function acceptFieldIcon() {
+  $('icon-error').hidden = true
+
+  api.permissions
+    .request({ origins: ['<all_urls>'] })
+    .then((ok) => {
+      if (!ok) {
+        // Un no non e' un errore e non si insiste: si va avanti, e resta
+        // l'interruttore nelle impostazioni.
+        return show('done')
+      }
+      return send('SET_SETTINGS', { patch: { injectIcon: true } }).then(() => show('done'))
+    })
+    .catch(() => {
+      $('icon-error').textContent = 'Firefox did not let that through. You can turn it on later in settings.'
+      $('icon-error').hidden = false
+    })
 }
 
 function expire() {
@@ -130,3 +183,5 @@ begin()
 $('retry').addEventListener('click', begin)
 $('reopen').addEventListener('click', openConsentTab)
 $('close').addEventListener('click', () => window.close())
+$('icon-yes').addEventListener('click', acceptFieldIcon)
+$('icon-no').addEventListener('click', () => show('done'))

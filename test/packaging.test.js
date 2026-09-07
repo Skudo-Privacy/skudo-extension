@@ -214,6 +214,103 @@ describe('compatibilità del manifest', () => {
   })
 })
 
+/**
+ * Le icone dei siti.
+ *
+ * Il modo sbagliato di farle e' anche il modo ovvio, e' quello che fanno quasi
+ * tutti, e sarebbe una riga: chiedere `https://sito/favicon.ico`. Fatto da
+ * qui, annuncia a ognuno di quei siti, dall'indirizzo di casa dell'utente, che
+ * qualcuno sta guardando la propria lista di iscrizioni.
+ *
+ * Queste prove esistono perche' quella riga e' facilissima da riscrivere, e
+ * perche' quando ricomparira' sembrera' una semplificazione.
+ */
+describe('le icone dei siti', () => {
+  it('nessun indirizzo di rete e scritto a mano nel codice', () => {
+    for (const { path, code } of sources) {
+      const literals = code.match(/https?:\/\/[^'"`\s)]+/g) || []
+
+      for (const url of literals) {
+        expect(
+          url.startsWith('http://www.w3.org/'),
+          `indirizzo scritto a mano in ${path}: ${url}`
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('si scarica solo da dove il pacchetto e stato costruito per parlare', () => {
+    const icons = readFileSync(join(src, 'shared', 'icons.js'), 'utf8')
+    const calls = withoutComments(icons).match(/fetch\(\s*`([^`]+)`/g) || []
+
+    expect(calls.length).toBe(2)
+    for (const call of calls) {
+      expect(call.includes('${ICONS_URL}') || call.includes('${INSTANCE}')).toBe(true)
+    }
+  })
+
+  it('la richiesta di un icona non porta con se nessuna credenziale', () => {
+    // Una richiesta autenticata direbbe "l'utente X ha un alias per il sito Y",
+    // cioe' ricostruirebbe sul server la mappa che tutto il resto del sistema
+    // esiste per non costruire.
+    const icons = withoutComments(readFileSync(join(src, 'shared', 'icons.js'), 'utf8'))
+
+    expect(icons).not.toMatch(/Authorization/)
+    expect(icons).not.toMatch(/getToken/)
+    expect((icons.match(/credentials: 'omit'/g) || []).length).toBe(2)
+  })
+
+  it('le icone si passano come dati, mai come indirizzo da ricaricare', () => {
+    // Se si passasse l'indirizzo, sarebbe il browser dell'utente a scaricarle
+    // di nuovo da ogni contesto, e dentro una pagina di terzi quella richiesta
+    // comparirebbe nella console di quel sito.
+    const popup = withoutComments(readFileSync(join(src, 'popup.js'), 'utf8'))
+
+    expect(popup).toMatch(/image\.src = data/)
+    expect(popup).not.toMatch(/ICONS_URL/)
+  })
+})
+
+/**
+ * Il freno sulla creazione.
+ *
+ * Vale solo se il conteggio non vive nella finestra che lo mostra: il popup si
+ * chiude appena si guarda un'altra scheda, e un freno che si azzera chiudendo
+ * una finestra e' un freno tolto proprio a chi sta premendo piu' volte.
+ */
+describe('il freno sulla creazione', () => {
+  it('il conteggio sta nel contesto di sfondo, non in chi lo disegna', () => {
+    const background = withoutComments(readFileSync(join(src, 'background.js'), 'utf8'))
+    const popup = withoutComments(readFileSync(join(src, 'popup.js'), 'utf8'))
+    const content = withoutComments(readFileSync(join(src, 'content.js'), 'utf8'))
+
+    expect(background).toMatch(/createCooldown/)
+
+    // Chi disegna chiede, non conta.
+    for (const [name, code] of [
+      ['popup', popup],
+      ['content', content],
+    ]) {
+      expect(code, `${name} non deve tenere un conto suo`).toMatch(/COOLDOWN_STATE/)
+      expect(code, `${name} non deve conoscere le soglie`).not.toMatch(/cooldown\.afterCreate/)
+    }
+  })
+
+  it('passa da un posto solo, qualunque sia il bottone premuto', () => {
+    // I punti da cui si crea un alias sono quattro: il popup, il pannello nelle
+    // pagine, il menu contestuale e la scorciatoia da tastiera. Il controllo
+    // sta dentro `createAlias`, che e' quello che attraversano tutti.
+    const background = withoutComments(readFileSync(join(src, 'background.js'), 'utf8'))
+    const created = background.slice(
+      background.indexOf('async function createAlias'),
+      background.indexOf('function describeAlias')
+    )
+
+    expect(created).toMatch(/cooldown\.remaining/)
+    expect(created).toMatch(/noteCreation\(\)/)
+  })
+})
+
 describe('file dichiarati', () => {
   const declared = [
     ...Object.values(manifest.icons),

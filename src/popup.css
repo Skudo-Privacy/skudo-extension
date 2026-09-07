@@ -217,6 +217,33 @@ body {
 }
 .row[aria-selected='true'] .row__badge { background: var(--brand); color: var(--brand-ink); }
 
+/*
+ * Il segno con dentro l'icona del sito.
+ *
+ * Il fondo resta chiaro anche al buio, e non e' una dimenticanza: meta' delle
+ * favicon in giro sono scure su trasparente, disegnate per una barra di schede
+ * chiara. Su un fondo scuro sparirebbero, e sparirebbero proprio quelle dei
+ * siti piu' seri, che tendono al monocromatico. Una pastiglia chiara fissa
+ * costa un po' di contrasto con il resto della riga e fa vedere tutte le
+ * icone invece che meta'.
+ */
+.row__badge.has-icon {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  /* La lettera sotto non si vede piu', ma resta nel documento: se l'immagine
+     non si carica, il ripiego c'e' gia'. */
+  color: transparent;
+}
+.row[aria-selected='true'] .row__badge.has-icon { background: #fff; }
+.row__badge img {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+.row__badge { position: relative; }
+
 .row__text { flex: 1; min-width: 0; }
 .row__title {
   display: block;
@@ -380,6 +407,38 @@ body {
   transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 .button:active { transform: scale(.99); }
+
+/*
+ * L'anello dell'attesa fra un alias e il successivo.
+ *
+ * Gira e basta: non e' una barra di avanzamento e non prova a essere precisa,
+ * perche' il numero esatto lo dice l'etichetta accanto. Serve a far capire che
+ * il bottone e' spento *per adesso* e non rotto.
+ */
+.button__wait {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: .8;
+  animation: skudo-wait 1.1s linear infinite;
+}
+@keyframes skudo-wait { to { transform: rotate(360deg); } }
+
+/* Chi ha chiesto meno movimento riceve un anello fermo, non nessun anello:
+   l'informazione "c'e' un'attesa in corso" resta. */
+@media (prefers-reduced-motion: reduce) {
+  .button__wait { animation: none; }
+}
+
+/* Il bottone in attesa non e' un bottone guasto: resta leggibile, invece di
+   sbiadire come quelli davvero disabilitati. */
+.button[aria-disabled='true'] { opacity: 1; }
+.button--primary[aria-disabled='true'] {
+  background: color-mix(in srgb, var(--brand) 55%, var(--sunken));
+}
 .button:disabled { opacity: .55; cursor: default; }
 .button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .button--primary { background: var(--brand); color: var(--brand-ink); }

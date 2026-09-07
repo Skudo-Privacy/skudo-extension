@@ -40,6 +40,29 @@ const DEFAULTS = {
    */
   describeWithSite: true,
   /**
+   * Il legame tecnico fra un alias e il sito.
+   *
+   * Interruttore suo, separato da `describeWithSite`, e la separazione non e'
+   * pignoleria. Sono due cose diverse: quella scrive il nome del sito dentro la
+   * nota, che e' testo che l'utente legge e riscrive; questa crea una riga che
+   * dice "questo alias appartiene a questo posto", ed e' cio' che permette di
+   * riconoscere un alias gia' dato, di mostrarne l'icona e, un domani, di
+   * sostituirlo quando quel sito perde i dati.
+   *
+   * Chi non vuole il nome del sito scritto nella nota puo' comunque volere le
+   * icone, e viceversa. Un interruttore solo per due cose obbliga a rinunciare
+   * a una per rifiutare l'altra.
+   */
+  associateSite: true,
+  /**
+   * Le icone dei siti accanto agli alias.
+   *
+   * Spegnendolo non si perde nessun dato: restano le lettere. Vedi
+   * src/shared/icons.js per come vengono prese senza che nessun sito sappia
+   * che qualcuno le sta guardando.
+   */
+  siteIcons: true,
+  /**
    * Tema. Non `auto` di sistema: su Mullvad Browser e LibreWolf
    * `prefers-color-scheme` è falsato da resistFingerprinting e riporta sempre
    * chiaro. La media query serve solo a scegliere il valore iniziale.

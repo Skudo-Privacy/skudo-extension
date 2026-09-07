@@ -16,11 +16,15 @@ import { INSTANCE } from './config.js'
 const TIMEOUT_MS = 15000
 
 export class ApiError extends Error {
-  constructor(message, { code = 'ERROR', status = 0 } = {}) {
+  constructor(message, { code = 'ERROR', status = 0, retryAfter = 0 } = {}) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
+    // Millisecondi da aspettare, quando c'e' qualcosa da aspettare. Serve al
+    // freno sulla creazione: chi disegna il bottone deve sapere quanto manca,
+    // non solo che non si puo'.
+    this.retryAfter = retryAfter
   }
 }
 
@@ -108,9 +112,9 @@ export class SkudoApi {
   }
 
   /**
-   * @param {{domain: string, format: string, localPart?: string, description?: string}} options
+   * @param {{domain: string, format: string, localPart?: string, description?: string, site?: string, siteRoot?: string}} options
    */
-  async createAlias({ domain, format, localPart = '', description = '' }) {
+  async createAlias({ domain, format, localPart = '', description = '', site = '', siteRoot = '' }) {
     const { data } = await this.request('/api/v1/aliases', {
       method: 'POST',
       body: {
@@ -118,15 +122,25 @@ export class SkudoApi {
         format,
         local_part: localPart || undefined,
         description: description || undefined,
+        // Il legame tecnico con il sito. Due campi perche' il dominio
+        // registrabile lo sa calcolare solo chi ha la lista dei suffissi, cioe'
+        // noi: il server lo riceve e verifica che appartenga davvero all'host.
+        // Vedi src/shared/domain.js e App\Rules\SiteRoot nel repo di Skudo.
+        site: site || undefined,
+        site_root: siteRoot || undefined,
       },
     })
     return data
   }
 
-  async updateAlias(id, { description }) {
+  async updateAlias(id, { description, site = '', siteRoot = '' }) {
     const { data } = await this.request(`/api/v1/aliases/${id}`, {
       method: 'PATCH',
-      body: { description },
+      body: {
+        description,
+        site: site || undefined,
+        site_root: siteRoot || undefined,
+      },
     })
     return data
   }
@@ -139,14 +153,37 @@ export class SkudoApi {
    * Gli alias già esistenti che riguardano un sito.
    *
    * È quello che rende possibile proporre il riuso su un modulo di accesso
-   * invece di creare l'ennesimo indirizzo inutile. Funziona perché alla
-   * creazione mettiamo il dominio del sito nella descrizione.
+   * invece di creare l'ennesimo indirizzo inutile.
+   *
+   * Il filtro va su un indice cieco, non su una ricerca testuale: il server
+   * confronta l'HMAC del dominio invece di decifrare e scorrere le descrizioni
+   * di tutti gli alias dell'utente a ogni apertura del popup. Vedi
+   * App\Models\AliasSite.
    */
   async findAliasesForSite(site) {
     const params = new URLSearchParams({
-      'filter[search]': site,
+      'filter[site]': site,
       'filter[deleted]': 'without',
       'page[size]': '10',
+      sort: '-created_at',
+    })
+    const { data } = await this.request(`/api/v1/aliases?${params}`)
+    return data || []
+  }
+
+  /**
+   * Gli alias che contengono un testo.
+   *
+   * Separata da `findAliasesForSite` da quando il legame con il sito e' un
+   * campo suo: prima erano la stessa chiamata perche' il sito viveva dentro la
+   * descrizione, e cercare per sito voleva dire cercare per testo. Ora sono due
+   * domande diverse e vanno a due indici diversi.
+   */
+  async searchAliases(query) {
+    const params = new URLSearchParams({
+      'filter[search]': query,
+      'filter[deleted]': 'without',
+      'page[size]': '20',
       sort: '-created_at',
     })
     const { data } = await this.request(`/api/v1/aliases?${params}`)
