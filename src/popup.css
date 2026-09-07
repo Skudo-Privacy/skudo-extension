@@ -144,6 +144,25 @@ body {
   appearance: none;
 }
 .search input:focus { outline: none; }
+/* Nasconde la crocetta nativa di Chromium: la nostra e' l'unica, cosi' il
+   campo si comporta allo stesso modo nei due browser. */
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+.search__clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.search__clear:hover { background: var(--sunken); color: var(--ink); }
+.search__clear:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 
 /* L'elenco ---------------------------------------------------------- */
 

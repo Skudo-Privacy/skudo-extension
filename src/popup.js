@@ -246,11 +246,60 @@ function renderList() {
   const query = $('search').value.trim()
   const empty = $('list-empty')
   empty.hidden = aliases.length > 0
-  empty.textContent = query
-    ? `Nothing matching "${query}".`
-    : site
-      ? `No alias for ${site} yet.`
+  empty.textContent = isSiteQuery(query)
+    ? `No alias for ${site} yet. Clear the box to see them all.`
+    : query
+      ? `Nothing matching "${query}".`
       : 'No aliases yet.'
+}
+
+/**
+ * La barra di ricerca contiene il sito corrente, cosi' come l'ha messa
+ * l'apertura del popup?
+ *
+ * Serve a due cose. Con questa esatta parola cerchiamo per relazione
+ * (`filter[site]`, che passa dall'indice cieco lato server) invece che per
+ * testo, quindi l'elenco e' esatto e non "tutto cio' che contiene quelle
+ * lettere". E il messaggio di elenco vuoto puo' dire come vedere tutto il
+ * resto, che era proprio l'informazione che mancava.
+ */
+const isSiteQuery = (query) => Boolean(site) && query === site
+
+/** Il pulsante di svuotamento esiste solo quando c'e' qualcosa da svuotare. */
+function syncSearchClear() {
+  $('search-clear').hidden = $('search').value.trim() === ''
+}
+
+/**
+ * Copiare un alias mentre si sta su un sito dice dove quell'alias viene
+ * usato, e quel legame non lo avevamo mai raccolto per gli alias nati prima
+ * della funzione: il loro elenco mostra una lettera al posto dell'icona,
+ * per sempre, perche' nessuno ha mai scritto a quale sito appartengono.
+ *
+ * Tre condizioni, tutte necessarie. Solo se l'alias non ha ancora un sito
+ * (non sovrascriviamo mai un legame esistente: chi copia un vecchio alias
+ * su una pagina qualunque non deve spostarlo la'), solo se il popup e'
+ * aperto su un sito vero, e solo se l'utente ha lasciato accesa
+ * l'associazione automatica, che e' l'interruttore che significa esattamente
+ * questo.
+ */
+async function rememberSiteFor(alias) {
+  if (!site || alias.site || !settings?.associateSite) return
+
+  const root = registrableDomain(site)
+  if (!root) return
+
+  try {
+    await send('UPDATE_ALIAS', { id: alias.id, site, siteRoot: root })
+  } catch {
+    // Un'associazione mancata non e' un errore da mostrare: l'utente aveva
+    // chiesto di copiare un indirizzo, e quello e' andato a buon fine.
+    return
+  }
+
+  alias.site = site
+  renderList()
+  loadIcons()
 }
 
 /**
@@ -267,8 +316,8 @@ async function loadList() {
 
   let next = []
   try {
-    if (query) next = await send('SEARCH_ALIASES', { query })
-    else if (site) next = await send('ALIASES_FOR_SITE', { site })
+    if (isSiteQuery(query)) next = await send('ALIASES_FOR_SITE', { site })
+    else if (query) next = await send('SEARCH_ALIASES', { query })
     else next = await send('RECENT_ALIASES')
   } catch (error) {
     if (thisRequest !== listRequest) return
@@ -343,6 +392,7 @@ function addressBlock(alias) {
     copy.textContent = ''
     copy.appendChild(icon(PATHS.tick))
     copy.title = 'Copied'
+    rememberSiteFor(alias)
     setTimeout(() => {
       copy.dataset.done = 'false'
       copy.textContent = ''
@@ -371,8 +421,9 @@ function receivingToggle(alias) {
   toggle.type = 'button'
   toggle.className = 'toggle'
   toggle.setAttribute('role', 'switch')
-  toggle.setAttribute('aria-checked', String(alias.active))
-  toggle.setAttribute('aria-label', alias.active ? 'Turn off' : 'Turn on')
+  const on = alias.active !== false
+  toggle.setAttribute('aria-checked', String(on))
+  toggle.setAttribute('aria-label', on ? 'Turn off' : 'Turn on')
 
   toggle.addEventListener('click', async () => {
     const wanted = !alias.active
@@ -505,7 +556,7 @@ function renderDetail() {
   const rows = document.createElement('div')
   rows.className = 'detail__rows'
 
-  rows.appendChild(detailRow('Receiving mail', receivingToggle(alias)))
+  rows.appendChild(detailRow('Enabled', receivingToggle(alias)))
 
   if (alias.createdAt) {
     const when = document.createElement('span')
@@ -719,6 +770,11 @@ async function init() {
 
   site = await currentSite()
   $('site').textContent = site
+  // Il sito parte scritto nella barra: e' un filtro, e un filtro si vede e
+  // si cancella. Prima era uno stato implicito del popup, e l'unico modo di
+  // uscirne era scrivere qualcos'altro sopra.
+  if (site) $('search').value = site
+  syncSearchClear()
   show('main')
 
   await loadList()
@@ -754,8 +810,18 @@ $('signout').addEventListener('click', async () => {
 $('create').addEventListener('click', create)
 
 $('search').addEventListener('input', () => {
+  syncSearchClear()
   clearTimeout(searchTimer)
   searchTimer = setTimeout(loadList, SEARCH_DEBOUNCE_MS)
+})
+
+$('search-clear').addEventListener('click', () => {
+  const field = $('search')
+  field.value = ''
+  syncSearchClear()
+  field.focus()
+  clearTimeout(searchTimer)
+  loadList()
 })
 
 $('opt-inject').addEventListener('change', onInjectToggle)

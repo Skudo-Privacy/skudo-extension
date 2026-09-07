@@ -124,6 +124,59 @@ describe('il popup', () => {
     expect(document.querySelectorAll('#alias-list li')).toHaveLength(1)
   })
 
+  it('il sito parte scritto nella barra di ricerca, e si puo cancellare', async () => {
+    const fake = await startPopup()
+
+    // Il filtro si vede: e' nel campo, non nascosto nello stato del popup.
+    expect(document.getElementById('search').value).toBe('example.com')
+    expect(document.getElementById('search-clear').hidden).toBe(false)
+    // Con quella parola esatta si cerca per relazione, non per testo.
+    expect(fake.sent.some((m) => m.type === 'ALIASES_FOR_SITE')).toBe(true)
+    expect(fake.sent.some((m) => m.type === 'SEARCH_ALIASES')).toBe(false)
+
+    document.getElementById('search-clear').click()
+    await settle()
+
+    // Svuotare mostra tutti gli alias, anche quelli di altri siti.
+    expect(document.getElementById('search').value).toBe('')
+    expect(document.getElementById('search-clear').hidden).toBe(true)
+    expect(fake.sent.some((m) => m.type === 'RECENT_ALIASES')).toBe(true)
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(2)
+  })
+
+  it('aperto su un sito senza alias dice come vedere tutti gli altri', async () => {
+    await startPopup({ ALIASES_FOR_SITE: () => [] })
+
+    const empty = document.getElementById('list-empty')
+    expect(empty.hidden).toBe(false)
+    expect(empty.textContent).toContain('Clear the box')
+  })
+
+  it('copiare un alias senza sito lo associa a quello che si sta guardando', async () => {
+    const fake = await startPopup({ RECENT_ALIASES: () => ALIASES, ALIASES_FOR_SITE: () => [ALIASES[1]] })
+
+    document.querySelector('#alias-list .row').click()
+    await settle()
+    document.querySelector('.address .icon-button').click()
+    await settle()
+    await settle()
+
+    const update = fake.sent.find((m) => m.type === 'UPDATE_ALIAS')
+    expect(update).toMatchObject({ id: 'a2', site: 'example.com', siteRoot: 'example.com' })
+  })
+
+  it('copiare un alias che ha gia un sito non lo sposta', async () => {
+    const fake = await startPopup()
+
+    document.querySelector('#alias-list .row').click()
+    await settle()
+    document.querySelector('.address .icon-button').click()
+    await settle()
+    await settle()
+
+    expect(fake.sent.some((m) => m.type === 'UPDATE_ALIAS')).toBe(false)
+  })
+
   it('senza un sito davanti mostra gli ultimi alias', async () => {
     const fake = await startPopup()
     fake.api.tabs.query = async () => [{ id: 1, url: 'about:newtab' }]
@@ -160,7 +213,7 @@ describe('il popup', () => {
     const detail = document.getElementById('detail')
     expect(detail.textContent).toContain('quiet.pine8x')
     expect(detail.querySelector('#detail-note').value).toBe('example.com')
-    expect(detail.textContent).toContain('Receiving mail')
+    expect(detail.textContent).toContain('Enabled')
   })
 
   it('non nomina mai l indirizzo di inoltro', async () => {

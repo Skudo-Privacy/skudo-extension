@@ -501,13 +501,24 @@ const handlers = {
     return skudo.getDomainOptions()
   },
 
-  async UPDATE_ALIAS({ id, description }, sender) {
+  async UPDATE_ALIAS({ id, description, site = '', siteRoot = '' }, sender) {
     if (!fromOurOwnUi(sender) && !(await isUndoable(id))) {
       throw new ApiError('That alias cannot be changed from here.', { code: 'FORBIDDEN' })
     }
+    // L'associazione a un sito la scrive solo la nostra interfaccia. Da una
+    // pagina qualunque si puo' al massimo correggere la nota dell'alias
+    // appena creato (vedi UNDOABLE_KEY): se passasse anche il sito, un
+    // frammento di script su una pagina potrebbe attribuire a se' un alias
+    // nato altrove, e da quel momento l'elenco mostrerebbe il sito
+    // sbagliato accanto a quell'indirizzo.
+    const ours = fromOurOwnUi(sender)
     const skudo = await client()
-    await skudo.updateAlias(id, { description })
-    return { id }
+    await skudo.updateAlias(id, {
+      description,
+      site: ours ? site : '',
+      siteRoot: ours ? siteRoot : '',
+    })
+    return { id, site: ours ? site : '' }
   },
 
   async DELETE_ALIAS({ id }, sender) {

@@ -53,6 +53,16 @@
             <path d="m15.4 15.4 4.1 4.1" />
           </svg>
           <input type="search" id="search" placeholder="Search your aliases" autocomplete="off" />
+          <!-- Il pulsante di svuotamento e' nostro: Firefox non disegna la
+          crocetta nativa di `type="search"`, e su questo campo serve piu'
+          che altrove, perche' all'apertura contiene gia' il sito corrente e
+          svuotarlo e' il modo di vedere tutti gli alias. -->
+          <button type="button" id="search-clear" class="search__clear" hidden>
+            <span class="sr-only">Show all aliases</span>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </label>
 
         <p class="empty" id="list-empty" hidden></p>
