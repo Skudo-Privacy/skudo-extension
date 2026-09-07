@@ -161,8 +161,11 @@ export class SkudoApi {
    * App\Models\AliasSite.
    */
   async findAliasesForSite(site) {
+    // Uno o piu' domini: certi servizi hanno piu' domini e un account solo,
+    // e il server li confronta tutti in una richiesta invece di farsi
+    // chiamare una volta per dominio.
     const params = new URLSearchParams({
-      'filter[site]': site,
+      'filter[site]': Array.isArray(site) ? site.join(',') : site,
       'filter[deleted]': 'without',
       'page[size]': '10',
       sort: '-created_at',

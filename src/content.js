@@ -31,6 +31,8 @@ import { createIcon, createMenu, createToast, setTheme } from './content/ui.js'
 import { foreignShift, iconPosition, iconSize, menuPosition } from './content/anchor.js'
 import { findEmailFields } from './detector/index.js'
 import { api } from './shared/browser.js'
+import { registrableDomain } from './shared/domain.js'
+import { isThirdPartyCredentialFrame } from './shared/related-sites.js'
 
 /** Quanti fotogrammi immobili prima di spegnere il ciclo. */
 const IDLE_FRAMES_BEFORE_STOP = 20
@@ -622,6 +624,13 @@ function scheduleScan() {
 }
 
 async function start() {
+  // Riquadri di terze parti che chiedono credenziali altrui: dentro non si
+  // fa niente. Lo script gira in tutti i riquadri e legge il nome dell'host
+  // del riquadro, non della pagina, quindi nel riquadro di Plaid dentro il
+  // sito di una banca avremmo proposto un alias e lo avremmo registrato su
+  // plaid.com, dove non verra' mai usato. Vedi shared/related-sites.js.
+  if (isThirdPartyCredentialFrame(registrableDomain(site()), window.top !== window.self)) return
+
   // Il tema e la lista dei siti zittiti, chiesti una volta sola. Nessun segreto
   // passa di qui: e' la stessa risposta che riceve il popup, meno il token, che
   // non esce mai dal contesto di sfondo.

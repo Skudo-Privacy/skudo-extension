@@ -178,7 +178,13 @@ function aliasRow(alias) {
 
   const sub = document.createElement('span')
   sub.className = 'row__sub'
-  sub.textContent = alias.description || alias.email.slice(alias.email.lastIndexOf('@'))
+  // Un alias che arriva da un dominio fratello dice da dove viene, sempre.
+  // Su vons.com puo' comparire l'alias nato su safeway.com perche' e' lo
+  // stesso account, ma senza scriverlo sarebbe un indirizzo apparso dal
+  // nulla, e chi guarda non ha modo di capire perche' e' li'.
+  sub.textContent = elsewhere(alias)
+    ? `Saved on ${registrableDomain(alias.site)}`
+    : alias.description || alias.email.slice(alias.email.lastIndexOf('@'))
   text.appendChild(sub)
 
   button.appendChild(text)
@@ -265,6 +271,20 @@ function renderList() {
  */
 const isSiteQuery = (query) => Boolean(site) && query === site
 
+/**
+ * L'alias appartiene a un sito diverso da quello che si sta guardando?
+ *
+ * Succede per i servizi con piu' domini e un account solo (safeway.com e
+ * vons.com): l'elenco li mostra insieme, e quello che arriva da un fratello
+ * va dichiarato. La regola di Apple per le password vale identica qui: una
+ * cosa salvata altrove si puo' proporre, ma solo dicendo dove.
+ */
+function elsewhere(alias) {
+  if (!site || !alias.site) return false
+
+  return registrableDomain(alias.site) !== registrableDomain(site)
+}
+
 /** Il pulsante di svuotamento esiste solo quando c'e' qualcosa da svuotare. */
 function syncSearchClear() {
   $('search-clear').hidden = $('search').value.trim() === ''
@@ -316,7 +336,7 @@ async function loadList() {
 
   let next = []
   try {
-    if (isSiteQuery(query)) next = await send('ALIASES_FOR_SITE', { site })
+    if (isSiteQuery(query)) next = await send('ALIASES_FOR_SITE', { site, includeInactive: true })
     else if (query) next = await send('SEARCH_ALIASES', { query })
     else next = await send('RECENT_ALIASES')
   } catch (error) {

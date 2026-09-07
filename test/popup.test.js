@@ -74,7 +74,7 @@ function fakeChrome(overrides = {}) {
         getURL: (path) => `chrome-extension://skudo/${path}`,
       },
       tabs: {
-        query: async () => [{ id: 1, url: 'https://example.com/signup' }],
+        query: async () => [{ id: 1, url: overrides.tabUrl ?? 'https://example.com/signup' }],
         create: vi.fn(async () => ({ id: 2 })),
       },
       permissions: {
@@ -142,6 +142,20 @@ describe('il popup', () => {
     expect(document.getElementById('search-clear').hidden).toBe(true)
     expect(fake.sent.some((m) => m.type === 'RECENT_ALIASES')).toBe(true)
     expect(document.querySelectorAll('#alias-list .row')).toHaveLength(2)
+  })
+
+  it('un alias di un dominio fratello dice da dove viene', async () => {
+    // safeway.com e vons.com sono un login solo: l'alias nato sull'uno
+    // compare sull'altro, ma senza dirlo sarebbe un indirizzo apparso dal
+    // nulla.
+    const sibling = { id: 'a3', email: 'calm.reef4z@skudo.me', description: 'spesa', site: 'safeway.com', active: true }
+    const fake = await startPopup({
+      ALIASES_FOR_SITE: () => [sibling],
+      tabUrl: 'https://vons.com/account',
+    })
+
+    expect(fake.sent.find((m) => m.type === 'ALIASES_FOR_SITE').includeInactive).toBe(true)
+    expect(document.querySelector('#alias-list .row__sub').textContent).toBe('Saved on safeway.com')
   })
 
   it('aperto su un sito senza alias dice come vedere tutti gli altri', async () => {

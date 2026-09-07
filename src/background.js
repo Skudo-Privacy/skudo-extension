@@ -12,6 +12,7 @@ import { api } from './shared/browser.js'
 import { INSTANCE } from './shared/config.js'
 import * as cooldown from './shared/cooldown.js'
 import { registrableDomain, siteFromUrl } from './shared/domain.js'
+import { relatedSites } from './shared/related-sites.js'
 import { forgetIcons, resolveIcons } from './shared/icons.js'
 import { forgetSecret, rememberSecret, readSecret } from './shared/pairing.js'
 import { clearToken, getSettings, getToken, setSettings, setToken } from './shared/storage.js'
@@ -208,18 +209,45 @@ function describeAlias(alias) {
 }
 
 /** Gli alias che l'utente ha già per un sito, per proporre il riuso. */
-async function aliasesForSite(site) {
-  if (!site) return []
+/**
+ * Il gruppo di domini che contano come "questo sito".
+ *
+ * Il dominio registrabile, piu' gli altri domini che condividono lo stesso
+ * account secondo i dati di apple/password-manager-resources: safeway.com e
+ * vons.com sono un login solo, e senza il gruppo il popup aperto su vons.com
+ * non trova niente e fa creare un secondo alias per lo stesso account.
+ *
+ * Si manda la radice, non il nome dell'host: gli alias sono registrati sul
+ * dominio registrabile, quindi chiedere `shop.example.com` non trovava
+ * l'alias registrato su `example.com`. Era un difetto anche prima del gruppo.
+ */
+function siteGroup(site) {
+  const root = registrableDomain(site)
+  if (!root) return []
+
+  // Sessanta e' il tetto che accetta il server (App\Rules\ValidSiteDomainList):
+  // il gruppo piu' lungo dei dati di partenza ne ha 53.
+  return [root, ...relatedSites(root)].slice(0, 60)
+}
+
+/**
+ * Gli alias che l'utente ha gia' per un sito.
+ *
+ * `onlyActive` distingue i due usi. Il pannello dentro la pagina propone di
+ * riusare un alias, e proporre un alias spento vorrebbe dire consigliare un
+ * indirizzo che non consegna niente. Il popup invece e' l'elenco: nascondere
+ * la' un alias spento significa dire "nessun alias per questo sito" a chi ne
+ * ha uno e l'ha solo messo in pausa.
+ */
+async function aliasesForSite(site, { onlyActive = true } = {}) {
+  const group = siteGroup(site)
+  if (group.length === 0) return []
+
   const skudo = await client()
-  const aliases = await skudo.findAliasesForSite(site)
-  return aliases
-    .filter((alias) => alias.active)
-    .map((alias) => ({
-      id: alias.id,
-      email: aliasEmail(alias),
-      description: alias.description || '',
-      site: alias.site || '',
-    }))
+  const aliases = await skudo.findAliasesForSite(group)
+  const rows = aliases.map(describeAlias)
+
+  return onlyActive ? rows.filter((alias) => alias.active) : rows
 }
 
 /* ------------------------------------------------------------------ *
@@ -255,8 +283,12 @@ const handlers = {
     })
   },
 
-  async ALIASES_FOR_SITE({ site }) {
-    return aliasesForSite(typeof site === 'string' ? site.slice(0, 253) : '')
+  async ALIASES_FOR_SITE({ site, includeInactive = false }, sender) {
+    // Solo la nostra interfaccia puo' chiedere anche gli alias spenti: da una
+    // pagina qualunque l'elenco resta quello che si puo' proporre di riusare.
+    return aliasesForSite(typeof site === 'string' ? site.slice(0, 253) : '', {
+      onlyActive: !(includeInactive && fromOurOwnUi(sender)),
+    })
   },
 
   /**

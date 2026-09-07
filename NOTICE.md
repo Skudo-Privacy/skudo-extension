@@ -1,8 +1,9 @@
 # Attribuzioni
 
-Questo progetto contiene lavoro derivato da tre estensioni libere. Nessuna delle
-tre licenze ci obbliga a pubblicare il nostro codice; tutte richiedono che
-l'avviso di copyright accompagni il pacchetto distribuito.
+Questo progetto contiene lavoro derivato da tre estensioni libere e dati presi
+da un progetto comune ai gestori di password. Nessuna di queste licenze ci
+obbliga a pubblicare il nostro codice; tutte richiedono che l'avviso di
+copyright accompagni il pacchetto distribuito.
 
 ## Firefox Relay, Mozilla Public License 2.0
 
@@ -34,6 +35,24 @@ Copyright (c) 2019 addy.io
 
 Le soglie di dimensione minima contro i campi trappola e il criterio di
 posizionamento dell'icona derivano dalla loro `content.js`.
+
+## Password Manager Resources, MIT
+
+<https://github.com/apple/password-manager-resources>
+
+Copyright (c) 2020 - 2026 Apple Inc.
+
+`src/shared/related-sites.js` è generato da due dei loro file di dati
+(`quirks/shared-credentials.json` e
+`quirks/websites-that-ask-for-credentials-for-other-services-when-embedded-as-third-party.json`)
+tramite `scripts/related-sites.mjs`. Il primo dice quali domini condividono lo
+stesso account, così un alias creato su safeway.com si trova anche su
+vons.com; il secondo dice dentro quali riquadri di terze parti non ha senso
+proporre niente. I dati sono loro, il formato compatto e il codice che li legge
+sono nostri.
+
+Il progetto chiede, senza obbligare, di restituire le correzioni trovate: se
+scopriamo un gruppo di domini mancante, va aperta una richiesta lì.
 
 ---
 
