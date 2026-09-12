@@ -1,125 +1,121 @@
-# Skudo browser extension
+<div align="center">
 
-Create an email alias instead of giving out your real address.
+<img src="src/assets/img/icon_128.png" width="96" height="96" alt="Skudo" />
 
-Status: **it loads and works**. Detection, the background context, the
-content script and the popup are written and tested. The scoped token exists,
-with expiry and revocation. What's missing is publishing on the stores.
+# Skudo
 
-## Why this isn't a fork
+**Create an email alias instead of giving out your real address.**
 
-The addy.io extension is MIT-licensed and our API is 100% compatible with it:
-point it at `app.skudo.org` with a token and it works today. But out of its
-4,728 lines, 3,854 are a single Vue component that would need rewriting
-anyway, and two of its other choices aren't shippable for us: the API key
-ends up in `storage.sync`, meaning on Google's or Mozilla's servers, and the
-content script asks for `<all_urls>` at install time.
+[![License](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
+[![Manifest](https://img.shields.io/badge/manifest-v3-green)](src/manifest.json)
+[![Firefox](https://img.shields.io/badge/firefox-128%2B-orange)](src/manifest.json)
+[![Chrome](https://img.shields.io/badge/chrome-supported-yellow)](src/manifest.json)
 
-What was worth keeping is about 400 lines of knowledge about form fields,
-which is carried over and credited in [NOTICE.md](NOTICE.md).
+[Website](https://skudo.org) · [Report an issue](https://github.com/Skudo-Privacy/skudo-extension/issues)
 
-## What it does differently
+</div>
 
-**It tells a signup form apart from a login form.** None of the alias
-extensions out there do this: addy.io, SimpleLogin and Firefox Relay put
-their button on every email field they find. On a login form, a new alias is
-actively harmful: the user types it in, can't sign in, and is left with an
-address to delete. Here, on a login form, we suggest the alias that already
-exists for that domain instead.
+---
 
-**It has a detection test corpus.** None of the three above have detection
-tests. Heuristics rot on their own: someone adds an exclusion for one site
-and two others silently break, with nobody to notice.
+## What is Skudo
 
-## The detector
+Skudo is a browser extension that generates a unique email alias for every
+site you sign up on, right from the field you're typing into. Mail sent to
+that alias reaches your real inbox; the site never sees your real address.
+If a service ever leaks or sells its list, you know exactly who to blame,
+and you can shut that one address off without touching anything else.
 
-Five layers, in order. It bails out before it starts scoring, because a
-false positive costs more than a false negative: if we miss a field the user
-just copies the alias by hand; if we drop one into someone's search box we've
-broken their page.
+## Features
 
-| | | |
-|---|---|---|
-| 0 | exclusion | `exclusions.js` |
-| 1 | certainty, when the site tells us directly | `index.js` |
-| 2 | signal scoring | `signals.js` |
-| 3 | form intent | `form-intent.js` |
-| 4 | physical sanity | `visibility.js` |
+- **Signup, not login.** Skudo tells the two apart. On a login form it
+  offers the alias you already have for that site instead of minting a new
+  one, so you're never locked out of your own account by a fresh address
+  with no history.
+- **One alias per site, per session.** Pressing the icon twice never
+  produces two addresses for the same signup.
+- **Shared-account awareness.** An alias created on one site is recognized
+  on the sites that share its login, so you don't end up with duplicates
+  across a company's related domains.
+- **Private by construction.** Site icons are proxied through Skudo's own
+  infrastructure instead of being requested from each site directly, so no
+  site ever learns that its icon was fetched, let alone by whom.
+- **One-click connect.** Signing in from the extension takes one click and
+  a visual code check, no API key to copy and paste anywhere.
+- **Small.** The whole package is under 100&nbsp;KB. The content script runs
+  on every page you open, so its size is a requirement, not an afterthought.
+- **Source-available.** The full source is here to read, audit, and verify
+  against what actually ships. See [License](#license).
 
-The layer-2 weights marked `calibrated: true` are the ones learned by
-Mozilla's own model, carried over to the digit. The most interesting result
-from that model is counter-intuitive: the strongest signal isn't any
-attribute of the input itself, it's the text of the associated `<label>`.
+## Installation
 
-The rest are ours, hand-tuned, and due for a proper regression once the
-corpus is built from real captures instead of hand-written forms modeled on
-recurring patterns.
-
-## Weight
-
-The content script loads on every page the user opens, so weight is a
-requirement, not a detail.
+Skudo isn't listed on the extension stores yet. Until it is, build it
+yourself:
 
 ```
-background.js    9.2 KB
-content.js      19.4 KB
-popup.js         8.0 KB
-connect.js       1.7 KB
+git clone https://github.com/Skudo-Privacy/skudo-extension.git
+cd skudo-extension
+npm install
+npm run build
 ```
 
-The whole package fits in 80 KB, against several hundred for comparable
-extensions. Three choices make that possible: no `webextension-polyfill`
-(30 KB, no longer needed since Manifest V3), no Fathom library (2,739 lines
-for four signals), no `psl` (100 KB just to work out a domain's name).
+Then load the `dist/` folder as a temporary or unpacked extension:
 
-## Commands
+| Browser | Steps |
+|---|---|
+| Firefox | `about:debugging` → This Firefox → Load Temporary Add-on → pick `dist/manifest.json` |
+| Chrome | `chrome://extensions` → Developer mode → Load unpacked → pick the `dist/` folder |
+
+## How it works
+
+1. Skudo watches for email fields as you type, and tells a signup form
+   apart from a login form before doing anything.
+2. On a signup, it offers to generate a fresh alias in place.
+3. Mail sent to that alias forwards straight to your real inbox.
+4. From the popup, you can rename, pause, or delete any alias at any time.
+
+## Privacy and security
+
+- The extension has **no access to any site** at install time. Reading
+  page content to draw the in-field icon is an opt-in permission, requested
+  only after you turn that feature on.
+- Your access token never leaves the extension's background context. The
+  script running inside a page never sees it.
+- Your forwarding address is never requested by, or exposed to, the
+  extension in any form.
+- Alias creation is rate-limited on both the client and the server, so a
+  stray double-click can't silently produce a handful of orphaned aliases.
+
+## Development
 
 ```
 npm install
-npm test          # 87 tests
-npm run build     # produces dist/
-npm run dev       # rebuilds on every save
-npm run lint      # Mozilla's own check, the one AMO review runs
-npm run firefox   # opens Firefox with the extension already loaded
-npm run pack      # produces the zip to upload by hand
+npm test          # runs the test suite
+npm run build      # builds dist/
+npm run dev        # rebuilds on every save
+npm run lint       # Mozilla's own review checker
+npm run firefox    # opens Firefox with the extension loaded
+npm run pack       # produces the upload-ready zip
 npm run format
 ```
 
-`npm run lint` is the one that matters before every release: it's the exact
-same check that runs during review on addons.mozilla.org, and it catches
-things no unit test can.
+## Roadmap
 
-## One site, one alias
-
-Pressing the icon twice doesn't create two addresses. The first alias given
-to a site stays the one used for the rest of that browser session, and
-getting a different one requires asking for it explicitly from the panel.
-Without this rule, a form with two email fields, or someone pressing the
-icon again because they missed the panel, ends up with four or five aliases
-for a single signup, with no way to tell which one the site actually
-received.
-
-## We don't override whoever was there first
-
-Bitwarden, Proton Pass, 1Password and we all put our icon in the same corner
-of the field, and the one underneath doesn't even get the clicks. You don't
-win that by raising your z-index: you look at what's already occupying that
-spot and move over. See `src/content/anchor.js`, which also covers the two
-ways of claiming that corner that don't leave a findable element behind.
-
-## What's missing
-
-- **Real captures** for the corpus, to calibrate the hand-tuned weights.
-- **Testing on real browsers**, Mullvad Browser and LibreWolf included.
-- **Publishing** on the stores, and the reproducible build that has to come
-  with it.
-
-## Documents
-
-- [NOTICE.md](NOTICE.md), where the derived work comes from
+- [ ] Real-world form captures to calibrate the detector further
+- [ ] Testing across Mullvad Browser and LibreWolf
+- [ ] Firefox Add-ons and Chrome Web Store listings
+- [ ] Reproducible, verifiable builds
 
 ## License
 
-The code is readable by anyone, right here on GitHub. It isn't open source:
-reusing it, even in part, requires written permission from Skudo. See
-[LICENSE](LICENSE).
+The source is readable by anyone, right here. It isn't open source: reusing
+any part of it requires prior written permission from Skudo. See
+[LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for the credits owed to the
+third-party research this project builds on.
+
+---
+
+<div align="center">
+
+Made by [Skudo](https://skudo.org)
+
+</div>
