@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Skudo browser extension.",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "scripts": {
     "test": "vitest run",

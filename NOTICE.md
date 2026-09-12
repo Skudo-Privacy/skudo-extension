@@ -1,31 +1,34 @@
-# Attribuzioni
+# Attributions
 
-Questo progetto contiene lavoro derivato da tre estensioni libere e dati presi
-da un progetto comune ai gestori di password. Nessuna di queste licenze ci
-obbliga a pubblicare il nostro codice; tutte richiedono che l'avviso di
-copyright accompagni il pacchetto distribuito.
+The code in this project is published under the terms of [LICENSE](LICENSE):
+readable by anyone, reusable only with written permission from Skudo. This
+document is about something else: the work derived from three free
+extensions and data taken from a project shared by password managers. None
+of those licenses require us to publish our own code; all of them require
+the copyright notice to travel with the distributed package, which is what
+this file does.
 
 ## Firefox Relay, Mozilla Public License 2.0
 
 <https://github.com/mozilla/fx-private-relay-add-on>
 
-I pesi del modello di rilevamento in `src/detector/signals.js`
-(`attrsMatchEmailExactly`, `placeholderMatchesEmail`, `labelMatchesEmail` e la
-costante di partenza) sono quelli appresi dal modello Fathom di Mozilla,
-addestrato su un insieme di moduli reali etichettati a mano. Sono riportati alla
-cifra. La libreria Fathom non è inclusa: la somma pesata e la sigmoide sono
-riscritte, perché 2.739 righe di libreria per quattro segnali non si giustificano.
+The detection model weights in `src/detector/signals.js`
+(`attrsMatchEmailExactly`, `placeholderMatchesEmail`, `labelMatchesEmail`,
+and the starting constant) are the ones learned by Mozilla's Fathom model,
+trained on a set of real hand-labeled forms. They're carried over to the
+digit. The Fathom library itself is not included: the weighted sum and
+sigmoid are rewritten, since 2,739 lines of library for four signals isn't
+justified.
 
 ## DuckDuckGo Autofill, Apache License 2.0
 
 <https://github.com/duckduckgo/duckduckgo-autofill>
 
-Le esclusioni in `src/detector/exclusions.js` ricalcano quelle della loro
-configurazione di riconoscimento campi: caselle di ricerca, filtri, campi
-"oggetto", codici sconto. L'impostazione a punteggio con segno di
-`src/detector/form-intent.js`, con il testo del pulsante di invio come segnale
-dominante, viene dal loro `FormAnalyzer.js`. Il codice è riscritto, i pesi sono
-nostri.
+The exclusions in `src/detector/exclusions.js` mirror their own field
+recognition configuration: search boxes, filters, "subject" fields, discount
+codes. The signed scoring setup in `src/detector/form-intent.js`, with the
+submit button's text as the dominant signal, comes from their
+`FormAnalyzer.js`. The code is rewritten; the weights are ours.
 
 ## addy.io browser extension, MIT
 
@@ -33,8 +36,8 @@ nostri.
 
 Copyright (c) 2019 addy.io
 
-Le soglie di dimensione minima contro i campi trappola e il criterio di
-posizionamento dell'icona derivano dalla loro `content.js`.
+The minimum-size thresholds against honeypot fields and the icon placement
+criteria are derived from their `content.js`.
 
 ## Password Manager Resources, MIT
 
@@ -42,19 +45,20 @@ posizionamento dell'icona derivano dalla loro `content.js`.
 
 Copyright (c) 2020 - 2026 Apple Inc.
 
-`src/shared/related-sites.js` è generato da due dei loro file di dati
-(`quirks/shared-credentials.json` e
+`src/shared/related-sites.js` is generated from two of their data files
+(`quirks/shared-credentials.json` and
 `quirks/websites-that-ask-for-credentials-for-other-services-when-embedded-as-third-party.json`)
-tramite `scripts/related-sites.mjs`. Il primo dice quali domini condividono lo
-stesso account, così un alias creato su safeway.com si trova anche su
-vons.com; il secondo dice dentro quali riquadri di terze parti non ha senso
-proporre niente. I dati sono loro, il formato compatto e il codice che li legge
-sono nostri.
+via `scripts/related-sites.mjs`. The first says which domains share the same
+account, so an alias created on safeway.com is also found on vons.com; the
+second says inside which third-party frames it doesn't make sense to suggest
+anything. The data is theirs; the compact format and the code that reads it
+are ours.
 
-Il progetto chiede, senza obbligare, di restituire le correzioni trovate: se
-scopriamo un gruppo di domini mancante, va aperta una richiesta lì.
+The project asks, without requiring it, that any corrections found be
+contributed back: if we discover a missing domain group, an issue should be
+opened there.
 
 ---
 
-I file di licenza per esteso vanno inclusi in `dist/` prima della pubblicazione
-sugli store.
+The full license texts need to be included in `dist/` before publishing on
+the stores.

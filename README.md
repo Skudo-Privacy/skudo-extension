@@ -1,63 +1,64 @@
 # Skudo browser extension
 
-Crea un alias email invece di dare il proprio indirizzo vero.
+Create an email alias instead of giving out your real address.
 
-Stato: **si carica e funziona**. Rilevamento, contesto di sfondo, content
-script e popup sono scritti e provati. Il token ad ambito ristretto c'è, con
-scadenza e revoca. Manca la pubblicazione sugli store.
+Status: **it loads and works**. Detection, the background context, the
+content script and the popup are written and tested. The scoped token exists,
+with expiry and revocation. What's missing is publishing on the stores.
 
-## Perché non è un fork
+## Why this isn't a fork
 
-L'estensione di addy.io è MIT e la nostra API è compatibile al 100%: puntata su
-`app.skudo.org` con un token, funziona oggi. Ma delle sue 4.728 righe, 3.854
-sono un unico componente Vue che va riscritto comunque, e altre due scelte non
-sono spedibili per noi: la chiave API finisce in `storage.sync`, cioè sui server
-di Google o Mozilla, e il content script chiede `<all_urls>` all'installazione.
+The addy.io extension is MIT-licensed and our API is 100% compatible with it:
+point it at `app.skudo.org` with a token and it works today. But out of its
+4,728 lines, 3,854 are a single Vue component that would need rewriting
+anyway, and two of its other choices aren't shippable for us: the API key
+ends up in `storage.sync`, meaning on Google's or Mozilla's servers, and the
+content script asks for `<all_urls>` at install time.
 
-Quello che vale la pena tenere sono circa 400 righe di conoscenza sui campi, che
-qui è portata e citata in [NOTICE.md](NOTICE.md).
+What was worth keeping is about 400 lines of knowledge about form fields,
+which is carried over and credited in [NOTICE.md](NOTICE.md).
 
-## Cosa fa di diverso
+## What it does differently
 
-**Distingue un modulo di iscrizione da uno di accesso.** Nessuna delle
-estensioni per alias in circolazione lo fa: addy.io, SimpleLogin e Firefox Relay
-mettono il proprio pulsante su ogni campo email che trovano. Su un accesso
-l'alias nuovo è dannoso: l'utente lo inserisce, non entra, e si ritrova un
-indirizzo da cancellare. Qui su un accesso si propone l'alias che già esiste per
-quel dominio.
+**It tells a signup form apart from a login form.** None of the alias
+extensions out there do this: addy.io, SimpleLogin and Firefox Relay put
+their button on every email field they find. On a login form, a new alias is
+actively harmful: the user types it in, can't sign in, and is left with an
+address to delete. Here, on a login form, we suggest the alias that already
+exists for that domain instead.
 
-**Ha un corpus di prova.** Nessuna delle tre ha test di rilevamento. Le
-euristiche peggiorano da sole: si aggiunge un'esclusione per un sito e se ne
-rompono due che nessuno riprova.
+**It has a detection test corpus.** None of the three above have detection
+tests. Heuristics rot on their own: someone adds an exclusion for one site
+and two others silently break, with nobody to notice.
 
-## Il rilevatore
+## The detector
 
-Cinque strati, in ordine. Si scarta prima di misurare, perché un falso positivo
-costa più di un falso negativo: se non troviamo un campo l'utente copia l'alias
-a mano, se ne infiliamo uno nella casella di ricerca abbiamo rotto la pagina di
-qualcun altro.
+Five layers, in order. It bails out before it starts scoring, because a
+false positive costs more than a false negative: if we miss a field the user
+just copies the alias by hand; if we drop one into someone's search box we've
+broken their page.
 
 | | | |
 |---|---|---|
-| 0 | esclusione | `exclusions.js` |
-| 1 | certezza, quando è il sito a dircelo | `index.js` |
-| 2 | punteggio sui segnali | `signals.js` |
-| 3 | intento del modulo | `form-intent.js` |
-| 4 | sanità fisica | `visibility.js` |
+| 0 | exclusion | `exclusions.js` |
+| 1 | certainty, when the site tells us directly | `index.js` |
+| 2 | signal scoring | `signals.js` |
+| 3 | form intent | `form-intent.js` |
+| 4 | physical sanity | `visibility.js` |
 
-I pesi dello strato 2 marcati `calibrated: true` sono quelli appresi da Mozilla e
-riportati alla cifra. Il risultato più interessante di quel modello è
-controintuitivo: il segnale più forte non è nessun attributo dell'input, è il
-testo della `<label>` associata.
+The layer-2 weights marked `calibrated: true` are the ones learned by
+Mozilla's own model, carried over to the digit. The most interesting result
+from that model is counter-intuitive: the strongest signal isn't any
+attribute of the input itself, it's the text of the associated `<label>`.
 
-Gli altri sono nostri, messi a mano, e vanno rifatti con una regressione quando
-il corpus sarà fatto di catture reali invece che di moduli scritti a mano sui
-modelli ricorrenti.
+The rest are ours, hand-tuned, and due for a proper regression once the
+corpus is built from real captures instead of hand-written forms modeled on
+recurring patterns.
 
-## Peso
+## Weight
 
-Il content script viene caricato su ogni pagina che l'utente apre, quindi il
-peso è un requisito e non un dettaglio.
+The content script loads on every page the user opens, so weight is a
+requirement, not a detail.
 
 ```
 background.js    9.2 KB
@@ -66,57 +67,59 @@ popup.js         8.0 KB
 connect.js       1.7 KB
 ```
 
-Il pacchetto intero sta in 80 KB, contro alcune centinaia delle estensioni
-equivalenti. Le tre scelte che lo permettono: niente `webextension-polyfill`
-(30 KB, non più necessario da Manifest V3), niente libreria Fathom (2.739 righe
-per quattro segnali), niente `psl` (100 KB per ricavare il nome di un dominio).
+The whole package fits in 80 KB, against several hundred for comparable
+extensions. Three choices make that possible: no `webextension-polyfill`
+(30 KB, no longer needed since Manifest V3), no Fathom library (2,739 lines
+for four signals), no `psl` (100 KB just to work out a domain's name).
 
-## Comandi
+## Commands
 
 ```
 npm install
-npm test          # 87 prove
-npm run build     # produce dist/
-npm run dev       # ricostruisce a ogni salvataggio
-npm run lint      # il controllo di Mozilla, quello della revisione AMO
-npm run firefox   # apre Firefox con l'estensione gia' caricata
-npm run pack      # produce lo zip da caricare a mano
+npm test          # 87 tests
+npm run build     # produces dist/
+npm run dev       # rebuilds on every save
+npm run lint      # Mozilla's own check, the one AMO review runs
+npm run firefox   # opens Firefox with the extension already loaded
+npm run pack      # produces the zip to upload by hand
 npm run format
 ```
 
-`npm run lint` e' quello che conta prima di ogni rilascio: e' lo stesso
-controllo che gira in revisione su addons.mozilla.org, e trova cose che nessun
-test unitario puo' trovare. Ha gia' pescato un difetto vero, vedi
-[docs/BROWSERS.md](docs/BROWSERS.md) alla voce "Versione minima".
+`npm run lint` is the one that matters before every release: it's the exact
+same check that runs during review on addons.mozilla.org, and it catches
+things no unit test can.
 
-Per caricarla in un browser: vedi [docs/BROWSERS.md](docs/BROWSERS.md).
+## One site, one alias
 
-## Un sito, un alias
+Pressing the icon twice doesn't create two addresses. The first alias given
+to a site stays the one used for the rest of that browser session, and
+getting a different one requires asking for it explicitly from the panel.
+Without this rule, a form with two email fields, or someone pressing the
+icon again because they missed the panel, ends up with four or five aliases
+for a single signup, with no way to tell which one the site actually
+received.
 
-Premere l'icona due volte non crea due indirizzi. Il primo alias dato a un sito
-resta quello per tutta la sessione del browser, e per averne un altro bisogna
-chiederlo dal pannello. Senza questa regola un modulo con due campi, o una
-persona che ripreme perché non ha visto il pannello, produce quattro o cinque
-alias per una sola iscrizione, e poi non c'è modo di sapere quale ha ricevuto
-davvero il sito.
+## We don't override whoever was there first
 
-## Non si scavalca chi c'era prima
+Bitwarden, Proton Pass, 1Password and we all put our icon in the same corner
+of the field, and the one underneath doesn't even get the clicks. You don't
+win that by raising your z-index: you look at what's already occupying that
+spot and move over. See `src/content/anchor.js`, which also covers the two
+ways of claiming that corner that don't leave a findable element behind.
 
-Bitwarden, Proton Pass, 1Password e noi mettiamo l'icona nello stesso angolo del
-campo, e quella sotto non riceve nemmeno i clic. Non si vince alzando lo
-z-index: si guarda cosa c'è in quel punto e ci si sposta. Vedi
-`src/content/anchor.js`, che copre anche i due modi di occupare l'angolo che non
-lasciano un elemento da trovare.
+## What's missing
 
-## Cosa manca
+- **Real captures** for the corpus, to calibrate the hand-tuned weights.
+- **Testing on real browsers**, Mullvad Browser and LibreWolf included.
+- **Publishing** on the stores, and the reproducible build that has to come
+  with it.
 
-- **Catture reali** nel corpus, per calibrare i pesi messi a mano.
-- **Prova sui browser veri**, Mullvad Browser e LibreWolf compresi.
-- **Pubblicazione** sugli store, e la costruzione riproducibile che la
-  accompagna. Vedi [docs/SECURITY.md](docs/SECURITY.md).
+## Documents
 
-## Documenti
+- [NOTICE.md](NOTICE.md), where the derived work comes from
 
-- [docs/SECURITY.md](docs/SECURITY.md), cosa protegge e cosa no
-- [docs/BROWSERS.md](docs/BROWSERS.md), i quattro browser
-- [NOTICE.md](NOTICE.md), da dove viene il lavoro derivato
+## License
+
+The code is readable by anyone, right here on GitHub. It isn't open source:
+reusing it, even in part, requires written permission from Skudo. See
+[LICENSE](LICENSE).

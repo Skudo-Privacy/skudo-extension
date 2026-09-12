@@ -1,0 +1,65 @@
+Skudo Source-Available License, Version 1.0
+
+Copyright (c) 2026 Skudo. All rights reserved.
+
+This license applies to the source code, design, and assets in this
+repository, except for the third-party components listed in NOTICE.md, which
+remain under their own original licenses.
+
+1. Right to view
+
+   Anyone may view, read, download, clone, and study this source code, for
+   personal, educational, security-research, or evaluation purposes. This
+   right does not extend beyond viewing and studying: see section 2.
+
+2. No reuse without written permission
+
+   No part of this software, whether source code, design, text, or assets,
+   may be copied, modified, merged, published, distributed, sublicensed,
+   deployed, self-hosted, offered as a service, or used to build a derivative
+   or competing product or service, in whole or in part, without prior
+   explicit written permission from Skudo. Silence, forking on a code
+   hosting platform, or the absence of a takedown request does not
+   constitute permission.
+
+3. Conditions on permitted use
+
+   Any use authorized under a written agreement with Skudo must, unless that
+   agreement says otherwise in writing:
+
+   a. retain this license and the copyright notice above in every copy of
+      the source code, modified or not;
+
+   b. display, inside the user interface of the resulting product or
+      service, a visible and unambiguous statement crediting Skudo as the
+      origin of the code (for example: "Built on code by Skudo,
+      https://skudo.org");
+
+   c. include, in the footer of every publicly reachable page of the
+      resulting product or service, a visible link to https://skudo.org.
+
+4. No trademark license
+
+   This license does not grant any right to use the Skudo name, logo, or
+   branding, beyond what section 3 requires for attribution.
+
+5. Termination
+
+   Any use that violates this license, or any written agreement issued under
+   it, immediately and automatically terminates whatever permission was
+   granted. On termination, all use must stop and all copies obtained under
+   that permission must be destroyed or returned.
+
+6. No warranty
+
+   This software is provided "as is", without warranty of any kind, express
+   or implied, including but not limited to the warranties of
+   merchantability, fitness for a particular purpose, and non-infringement.
+   In no event shall Skudo be liable for any claim, damages, or other
+   liability arising from, out of, or in connection with the software or its
+   use.
+
+7. Requesting permission
+
+   To request written permission for a use not covered above, contact Skudo
+   at license@skudo.org before starting that use.

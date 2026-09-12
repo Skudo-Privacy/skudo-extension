@@ -8,3 +8,10 @@ dist-local/
 # Pacchetti prodotti da web-ext
 /*.zip
 /*.xpi
+
+# Documentazione tecnica interna, ancora in italiano: esclusa dal repository
+# pubblico finche' non e' tradotta.
+/docs/
+
+# Configurazione locale di gh, scoped a questa cartella soltanto.
+/.gh-config/
