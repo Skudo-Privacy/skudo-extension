@@ -98,6 +98,15 @@ npm run pack       # produces the upload-ready zip
 npm run format
 ```
 
+## Contributing
+
+Bug reports, detection edge cases, and pull requests are welcome. If you've
+found a form Skudo gets wrong, a fixture in `test/detector/fixtures`
+reproducing it is worth more than a description of it.
+
+By submitting a contribution, you agree it can be included in the project
+under the same terms as [LICENSE](LICENSE).
+
 ## Roadmap
 
 - [ ] Real-world form captures to calibrate the detector further
