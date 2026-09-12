@@ -13,5 +13,7 @@ dist-local/
 # pubblico finche' non e' tradotta.
 /docs/
 
-# Configurazione locale di gh, scoped a questa cartella soltanto.
+# gh CLI installato e configurato solo per questa cartella, non a livello di
+# sistema: vedi come viene invocato negli scripts o nella sessione di lavoro.
 /.gh-config/
+/.gh-bin/
