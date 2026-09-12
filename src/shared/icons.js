@@ -53,11 +53,13 @@ const HIT_TTL_MS = 30 * 24 * 60 * 60 * 1000
  * Un buco, invece, si ricontrolla presto.
  *
  * Il caso normale non e' "questo sito non ha un'icona": e' "l'abbiamo appena
- * messa in coda e fra qualche secondo ci sara'". Tre giorni sarebbero
- * un'eternita'; qualche ora e' il tempo giusto per non insistere e non
- * lasciare un buco visibile.
+ * messa in coda e fra qualche secondo ci sara'" (verificato contro il server:
+ * la coda la produce in pochi secondi). Tenerlo per ore, come prima, vuol dire
+ * che chiunque riapra il popup nella stessa sessione vede ancora la lettera al
+ * posto dell'icona anche quando l'icona esiste gia'. Quindici minuti bastano a
+ * non insistere e non lasciano il buco visibile per tutta la sessione.
  */
-const MISS_TTL_MS = 6 * 60 * 60 * 1000
+const MISS_TTL_MS = 15 * 60 * 1000
 
 /**
  * Quante icone si tengono.

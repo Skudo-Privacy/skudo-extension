@@ -147,23 +147,47 @@ async function offerFieldIcon() {
  * rifiutata senza che a nessuno venga chiesto niente, il che assomiglia
  * moltissimo a un rifiuto dell'utente e non lo e'.
  */
-function acceptFieldIcon() {
+async function acceptFieldIcon() {
   $('icon-error').hidden = true
 
-  api.permissions
-    .request({ origins: ['<all_urls>'] })
-    .then((ok) => {
-      if (!ok) {
-        // Un no non e' un errore e non si insiste: si va avanti, e resta
-        // l'interruttore nelle impostazioni.
-        return show('done')
-      }
-      return send('SET_SETTINGS', { patch: { injectIcon: true } }).then(() => show('done'))
-    })
-    .catch(() => {
-      $('icon-error').textContent = 'Firefox did not let that through. You can turn it on later in settings.'
-      $('icon-error').hidden = false
-    })
+  let granted
+  try {
+    granted = await api.permissions.request({ origins: ['<all_urls>'] })
+  } catch {
+    // Qui il permesso e' davvero il problema: e' la richiesta stessa che ha
+    // fallito.
+    $('icon-error').textContent = 'Firefox did not let that through. You can turn it on later in settings.'
+    $('icon-error').hidden = false
+    return
+  }
+
+  if (!granted) {
+    // Un no non e' un errore e non si insiste: si va avanti, e resta
+    // l'interruttore nelle impostazioni.
+    return show('done')
+  }
+
+  // Il permesso e' gia' concesso, da qui in poi si tratta solo di salvare
+  // l'interruttore. Su Gecko concedere un permesso host puo' far ripartire il
+  // contesto di sfondo proprio in questo istante, e il primo messaggio
+  // spedito subito dopo puo' trovare nessuno ad ascoltare: non e' un rifiuto
+  // del permesso (che e' gia' avvenuto), quindi non si mostra quell'errore.
+  // Si riprova in silenzio poche volte, perche' lo sfondo si sveglia in
+  // frazioni di secondo.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      await send('SET_SETTINGS', { patch: { injectIcon: true } })
+      return show('done')
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
+  }
+
+  // Anche se il salvataggio non e' andato a segno, il permesso resta
+  // concesso: l'interruttore nelle impostazioni del popup rimanda lo stesso
+  // messaggio e funziona, perche' a quel punto lo sfondo e' sveglio da un
+  // pezzo. Non si mostra un errore per qualcosa che si risolve da solo.
+  show('done')
 }
 
 function expire() {
