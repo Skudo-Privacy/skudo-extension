@@ -13,23 +13,20 @@
   },
   "action": {
     "default_title": "Skudo",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "img/icon_16.png",
+      "32": "img/icon_32.png",
+      "48": "img/icon_48.png",
+      "128": "img/icon_128.png"
+    }
   },
   "background": {
-    "scripts": [
-      "background.js"
-    ],
+    "scripts": ["background.js"],
     "service_worker": "background.js"
   },
-  "permissions": [
-    "storage",
-    "scripting",
-    "activeTab",
-    "contextMenus"
-  ],
-  "optional_host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["storage", "scripting", "activeTab", "contextMenus"],
+  "optional_host_permissions": ["<all_urls>"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
@@ -56,9 +53,7 @@
       "id": "extension@skudo.org",
       "strict_min_version": "128.0",
       "data_collection_permissions": {
-        "required": [
-          "none"
-        ]
+        "required": ["none"]
       }
     }
   }

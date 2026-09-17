@@ -158,7 +158,9 @@ describe('compatibilità del manifest', () => {
     for (const verb of ['RECENT_ALIASES', 'SEARCH_ALIASES', 'SET_ALIAS_ACTIVE']) {
       const handler = background.slice(background.indexOf(`async ${verb}(`))
       const body = handler.slice(0, handler.indexOf('\n  },'))
-      expect(body, `${verb} deve verificare l'origine del messaggio`).toMatch(/fromOurOwnUi\(sender\)/)
+      expect(body, `${verb} deve verificare l'origine del messaggio`).toMatch(
+        /fromOurOwnUi\(sender\)/
+      )
     }
   })
 
@@ -315,10 +317,22 @@ describe('file dichiarati', () => {
   const declared = [
     ...Object.values(manifest.icons),
     manifest.action.default_popup,
+    ...Object.values(manifest.action.default_icon ?? {}),
     manifest.background.service_worker,
     ...Object.values(manifest.sidebar_action.default_icon),
     manifest.sidebar_action.default_panel,
   ]
+
+  it("la barra degli strumenti ha un'icona propria, non solo quella generica", () => {
+    // `icons` (in cima al manifest) e' per la pagina di gestione estensioni e
+    // la finestra d'installazione: senza `action.default_icon`, il pulsante
+    // nella barra degli strumenti mostra l'icona segnaposto del browser al
+    // suo posto, e non e' garantito che ricada su `icons` da sola: il
+    // comportamento cambia da motore a motore. E' successo davvero: la copia
+    // in dist-local/ (mai committata, persa alla prima ricostruzione) ce
+    // l'aveva, src/manifest.json no.
+    expect(manifest.action.default_icon).toEqual(manifest.icons)
+  })
 
   it('ogni file dichiarato nel manifest viene prodotto dalla costruzione', () => {
     const produced = new Set([
