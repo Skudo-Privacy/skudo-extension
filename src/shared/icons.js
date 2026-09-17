@@ -50,16 +50,26 @@ const CACHE_KEY = 'iconCache'
 const HIT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 /**
- * Un buco, invece, si ricontrolla presto.
+ * Un buco, invece, si ricontrolla presto. Molto presto.
  *
  * Il caso normale non e' "questo sito non ha un'icona": e' "l'abbiamo appena
- * messa in coda e fra qualche secondo ci sara'" (verificato contro il server:
- * la coda la produce in pochi secondi). Tenerlo per ore, come prima, vuol dire
- * che chiunque riapra il popup nella stessa sessione vede ancora la lettera al
- * posto dell'icona anche quando l'icona esiste gia'. Quindici minuti bastano a
- * non insistere e non lasciano il buco visibile per tutta la sessione.
+ * messa in coda e fra un attimo ci sara'". Misurato dal vivo contro il
+ * server di produzione (log del lavoratore della coda, due domini mai
+ * richiesti prima): il job `FetchSiteIcon` finisce in 230-300ms. Anche
+ * concedendo un sito lento (il limite totale del fetcher e' 6 secondi, fino
+ * a 3 candidati) il caso peggiore reale sta sotto ai 20 secondi, non ai
+ * minuti.
+ *
+ * Prima erano 15 minuti (che a loro volta avevano gia' sostituito un
+ * precedente "poche ore", vedi il changelog): ancora troppo. Chi apre il
+ * popup, vede la lettera, chiude, riapre trenta secondi dopo per controllare,
+ * cioe' esattamente come si usa un'estensione e come si testa, restava
+ * bloccato sulla stessa risposta "manca" per un quarto d'ora, anche con
+ * l'icona gia' pronta sul server. Sembra rotta per sempre; non lo e', il
+ * numero era solo troppo alto per come le persone aprono e chiudono un
+ * popup davvero.
  */
-const MISS_TTL_MS = 15 * 60 * 1000
+const MISS_TTL_MS = 30 * 1000
 
 /**
  * Quante icone si tengono.
