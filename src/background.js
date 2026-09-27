@@ -172,13 +172,25 @@ async function createAlias({ site = '', fresh = false } = {}) {
   // `accounts.esempio.com` e `esempio.com` sono lo stesso posto.
   const root = settings.associateSite ? registrableDomain(site) : ''
 
-  const alias = await skudo.createAlias({
-    domain: settings.domain,
-    format: settings.format,
-    description: settings.describeWithSite && site ? site : '',
-    site: root ? site : '',
-    siteRoot: root,
-  })
+  const startedAt = Date.now()
+  let alias
+  try {
+    alias = await skudo.createAlias({
+      domain: settings.domain,
+      format: settings.format,
+      description: settings.describeWithSite && site ? site : '',
+      site: root ? site : '',
+      siteRoot: root,
+    })
+  } catch (error) {
+    // Un 5xx o una risposta persa non vuol dire che l'alias non sia stato
+    // creato: il server puo' aver scritto la riga e poi fallito dopo. Mostrare
+    // "Server error" e far riprovare crea un doppione a ogni tentativo e
+    // consuma il limite orario. Prima di arrendersi si guarda se c'e'.
+    const uncertain = error.code === 'NETWORK' || error.code === 'TIMEOUT' || error.status >= 500
+    alias = uncertain ? await findJustCreated(skudo, startedAt) : null
+    if (!alias) throw error
+  }
 
   const created = {
     id: alias.id,
@@ -192,6 +204,22 @@ async function createAlias({ site = '', fresh = false } = {}) {
   await rememberSessionAlias(site, created)
 
   return { ...created, reused: false }
+}
+
+/**
+ * L'alias creato in questo istante, se il server l'ha creato ma non l'ha detto.
+ * La finestra di dieci secondi assorbe lo scarto fra l'orologio del server e
+ * il nostro.
+ */
+async function findJustCreated(skudo, startedAt) {
+  try {
+    const recent = await skudo.recentAliases()
+    return (
+      recent.find((entry) => Date.parse(entry.created_at) >= startedAt - 10000) || null
+    )
+  } catch {
+    return null
+  }
 }
 
 /** La forma con cui un alias esce da qui. Mai più campi di quelli che servono. */
