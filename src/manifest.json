@@ -3,7 +3,7 @@
   "name": "Skudo",
   "short_name": "Skudo",
   "description": "Create an email alias instead of giving out your real address.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage_url": "https://skudo.org",
   "icons": {
     "16": "img/icon_16.png",
