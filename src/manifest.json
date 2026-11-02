@@ -3,7 +3,7 @@
   "name": "Skudo",
   "short_name": "Skudo",
   "description": "Create an email alias instead of giving out your real address.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "homepage_url": "https://skudo.org",
   "icons": {
     "16": "img/icon_16.png",
@@ -51,10 +51,13 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "extension@skudo.org",
-      "strict_min_version": "128.0",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": ["none"]
       }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   }
 }

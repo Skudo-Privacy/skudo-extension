@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/license-source--available-blue)](LICENSE)
 [![Manifest](https://img.shields.io/badge/manifest-v3-green)](src/manifest.json)
-[![Firefox](https://img.shields.io/badge/firefox-128%2B-orange)](src/manifest.json)
+[![Firefox](https://img.shields.io/badge/firefox-140%2B-orange)](src/manifest.json)
 [![Chrome](https://img.shields.io/badge/chrome-supported-yellow)](src/manifest.json)
 
 [Website](https://skudo.org) · [Report an issue](https://github.com/Skudo-Privacy/skudo-extension/issues)
