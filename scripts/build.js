@@ -43,8 +43,38 @@ const instance = process.env.SKUDO_INSTANCE || 'https://app.skudo.org'
  */
 const icons = process.env.SKUDO_ICONS_URL || `${instance}/icons`
 
+/**
+ * Il CSS che sta dentro i moduli come stringa (il pannello iniettato vive in
+ * uno shadow root e non puo' linkare un foglio) non lo tocca nessun
+ * minificatore di JavaScript: commenti e rientri finirebbero nel pacchetto
+ * cosi' come sono. In produzione si passano da qui.
+ */
+function squeezeCss(css) {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/ ?([{};,]) ?/g, '$1')
+    .replace(/;}/g, '}')
+    .trim()
+}
+
+const squeezeTemplates = {
+  name: 'squeeze-templates',
+  setup(build) {
+    build.onLoad({ filter: /(content[\\/]ui|shared[\\/]tokens)\.js$/ }, async (args) => {
+      const source = await readFile(args.path, 'utf8')
+      const contents = source.replace(
+        /(const (?:STYLE|TOKENS|TOKENS_DARK|FONT_FACE) = `)([\s\S]*?)(`\n)/g,
+        (_all, open, body, close) => open + squeezeCss(body) + close
+      )
+      return { contents, loader: 'js' }
+    })
+  },
+}
+
 const options = {
   bundle: true,
+  plugins: production ? [squeezeTemplates] : [],
   define: {
     __SKUDO_INSTANCE__: JSON.stringify(instance),
     __SKUDO_ICONS__: JSON.stringify(icons),
@@ -74,27 +104,51 @@ const bundles = [
  * divergono di quattro punti di grigio: una differenza che non si nota
  * guardando e si nota usando.
  */
+/** Commenti e rientri fuori dalle pagine, solo in produzione. */
+function squeezeHtml(html) {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+async function copyCss(from, to) {
+  const css = await readFile(from, 'utf8')
+  if (!production) return writeFile(to, css)
+  const { code } = await esbuild.transform(css, { loader: 'css', minify: true, target: ['firefox115', 'chrome115'], legalComments: 'none' })
+  await writeFile(to, code)
+}
+
+async function copyHtml(from, to) {
+  const html = await readFile(from, 'utf8')
+  await writeFile(to, production ? squeezeHtml(html) : html)
+}
+
 async function writeTokens() {
   const { TOKENS, TOKENS_DARK, FONT_FACE } = await import(join(src, 'shared', 'tokens.js'))
 
-  await writeFile(
-    join(out, 'tokens.css'),
-    `/* Generato da src/shared/tokens.js. Non modificare a mano. */\n` +
+  const tokensCss =
+    (production ? '' : `/* Generato da src/shared/tokens.js. Non modificare a mano. */\n`) +
       `${FONT_FACE.trim()}\n\n` +
       `:root {\n${TOKENS.trimEnd()}\n}\n\n` +
       `@media (prefers-color-scheme: dark) {\n` +
       `  :root:not([data-theme='light']) {\n${TOKENS_DARK.trimEnd()}\n  }\n}\n\n` +
       `:root[data-theme='dark'] {\n${TOKENS_DARK.trimEnd()}\n}\n`
-  )
+
+  await writeFile(join(out, 'tokens.css'), tokensCss)
+  if (production) await copyCss(join(out, 'tokens.css'), join(out, 'tokens.css'))
 }
 
 async function copyStatic() {
   await writeTokens()
-  await cp(join(src, 'manifest.json'), join(out, 'manifest.json'))
-  await cp(join(src, 'popup.html'), join(out, 'popup.html'))
-  await cp(join(src, 'popup.css'), join(out, 'popup.css'))
-  await cp(join(src, 'connect.html'), join(out, 'connect.html'))
-  await cp(join(src, 'connect.css'), join(out, 'connect.css'))
+  const manifest = await readFile(join(src, 'manifest.json'), 'utf8')
+  await writeFile(join(out, 'manifest.json'), production ? JSON.stringify(JSON.parse(manifest)) : manifest)
+  await copyHtml(join(src, 'popup.html'), join(out, 'popup.html'))
+  await copyCss(join(src, 'popup.css'), join(out, 'popup.css'))
+  await copyHtml(join(src, 'connect.html'), join(out, 'connect.html'))
+  await copyCss(join(src, 'connect.css'), join(out, 'connect.css'))
   await cp(join(src, 'assets', 'img'), join(out, 'img'), { recursive: true })
   // Inter, incluso invece che preso da un CDN: vedi il commento in
   // src/shared/tokens.js. La licenza viaggia con il carattere.
