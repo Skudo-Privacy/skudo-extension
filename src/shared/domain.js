@@ -99,6 +99,12 @@ export function hostFromUrl(url) {
   }
 }
 
+/** TLD riservati o di reti private (RFC 6761, RFC 6762 e usi comuni). */
+const NON_PUBLIC_TLDS = new Set([
+  'localhost', 'local', 'localdomain', 'internal', 'intranet', 'lan', 'home', 'corp', 'test',
+  'example', 'invalid', 'onion', 'i2p', 'arpa', 'alt',
+])
+
 /**
  * Il dominio a cui il sito appartiene davvero.
  *
@@ -124,6 +130,9 @@ export function registrableDomain(host) {
 
   const tld = labels[labels.length - 1]
   if (tld.length < 2 || !/^[a-z]+$/.test(tld)) return ''
+  // Nomi che esistono solo su una rete locale: non sono siti, e il server li
+  // rifiuta come tali.
+  if (NON_PUBLIC_TLDS.has(tld)) return ''
 
   // Tre livelli sono il massimo che serve: nessun suffisso nell'elenco ne ha
   // di piu'.

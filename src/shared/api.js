@@ -16,7 +16,7 @@ import { INSTANCE } from './config.js'
 const TIMEOUT_MS = 15000
 
 export class ApiError extends Error {
-  constructor(message, { code = 'ERROR', status = 0, retryAfter = 0 } = {}) {
+  constructor(message, { code = 'ERROR', status = 0, retryAfter = 0, field = '' } = {}) {
     super(message)
     this.name = 'ApiError'
     this.code = code
@@ -25,6 +25,9 @@ export class ApiError extends Error {
     // freno sulla creazione: chi disegna il bottone deve sapere quanto manca,
     // non solo che non si puo'.
     this.retryAfter = retryAfter
+    // Il campo che il server ha rifiutato, per un 422: chi chiama puo' ritentare
+    // senza quello invece di rinunciare a tutto.
+    this.field = field
   }
 }
 
@@ -102,10 +105,12 @@ export class SkudoApi {
       })
     }
     if (status === 422 && data.errors) {
-      const first = Object.values(data.errors)[0]
+      const [field] = Object.keys(data.errors)
+      const first = data.errors[field]
       return new ApiError(Array.isArray(first) ? first[0] : 'That did not validate.', {
         code: 'INVALID',
         status,
+        field,
       })
     }
     return new ApiError(data.message || 'Something went wrong.', { code: 'ERROR', status })
