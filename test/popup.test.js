@@ -33,19 +33,24 @@ const ALIASES = [
 const PIXEL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
+function baseState() {
+  return {
+    domain: 'skudo.me',
+    format: 'random_characters',
+    injectIcon: false,
+    contextMenu: true,
+    describeWithSite: true,
+    associateSite: true,
+    siteIcons: true,
+    theme: 'auto',
+    signedIn: true,
+    pausedSites: [],
+  }
+}
+
 function fakeChrome(overrides = {}) {
   const handlers = {
-    GET_STATE: () => ({
-      domain: 'skudo.me',
-      format: 'random_characters',
-      injectIcon: false,
-      contextMenu: true,
-      describeWithSite: true,
-      associateSite: true,
-      siteIcons: true,
-      theme: 'auto',
-      signedIn: true,
-    }),
+    GET_STATE: () => baseState(),
     RECENT_ALIASES: () => ALIASES,
     SEARCH_ALIASES: () => [ALIASES[0]],
     ALIASES_FOR_SITE: () => [ALIASES[0]],
@@ -117,31 +122,42 @@ afterEach(() => {
 })
 
 describe('il popup', () => {
-  it('con un sito davanti mostra gli alias di quel sito', async () => {
+  it('con un sito davanti mette i suoi alias in cima, sotto il suo nome', async () => {
     await startPopup()
 
     expect(document.getElementById('site').textContent).toBe('example.com')
-    expect(document.querySelectorAll('#alias-list li')).toHaveLength(1)
+    const headings = [...document.querySelectorAll('#alias-list .list__heading')].map((h) => h.textContent)
+    expect(headings).toEqual(['On example.com', 'Recent'])
+    // Quello del sito prima, e senza doppioni con gli ultimi.
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(2)
+    expect(document.querySelector('#alias-list .row').dataset.id).toBe('a1')
   })
 
-  it('il sito parte scritto nella barra di ricerca, e si puo cancellare', async () => {
+  it('si apre con la ricerca vuota e con il primo alias gia scelto', async () => {
     const fake = await startPopup()
 
-    // Il filtro si vede: e' nel campo, non nascosto nello stato del popup.
-    expect(document.getElementById('search').value).toBe('example.com')
-    expect(document.getElementById('search-clear').hidden).toBe(false)
-    // Con quella parola esatta si cerca per relazione, non per testo.
-    expect(fake.sent.some((m) => m.type === 'ALIASES_FOR_SITE')).toBe(true)
-    expect(fake.sent.some((m) => m.type === 'SEARCH_ALIASES')).toBe(false)
-
-    document.getElementById('search-clear').click()
-    await settle()
-
-    // Svuotare mostra tutti gli alias, anche quelli di altri siti.
+    // Il sito non e' un filtro nascosto nella barra: li' sembrava la ricerca
+    // rotta. E' una sezione, e la barra resta libera.
     expect(document.getElementById('search').value).toBe('')
     expect(document.getElementById('search-clear').hidden).toBe(true)
+    expect(fake.sent.some((m) => m.type === 'ALIASES_FOR_SITE')).toBe(true)
     expect(fake.sent.some((m) => m.type === 'RECENT_ALIASES')).toBe(true)
-    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(2)
+    expect(document.querySelector('#detail .detail')).not.toBeNull()
+    expect(document.querySelector('#alias-list .row').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('le frecce spostano la scelta e Esc svuota la ricerca', async () => {
+    await startPopup()
+    const search = document.getElementById('search')
+
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }))
+    await settle()
+    expect(document.querySelectorAll('#alias-list .row')[1].getAttribute('aria-selected')).toBe('true')
+
+    search.value = 'harbour'
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    await settle()
+    expect(search.value).toBe('')
   })
 
   it('un alias di un dominio fratello dice da dove viene', async () => {
@@ -158,12 +174,31 @@ describe('il popup', () => {
     expect(document.querySelector('#alias-list .row__sub').textContent).toBe('Saved on safeway.com')
   })
 
-  it('aperto su un sito senza alias dice come vedere tutti gli altri', async () => {
+  it('aperto su un sito senza alias mostra comunque gli altri, senza titoli inutili', async () => {
     await startPopup({ ALIASES_FOR_SITE: () => [] })
 
-    const empty = document.getElementById('list-empty')
-    expect(empty.hidden).toBe(false)
-    expect(empty.textContent).toContain('Clear the box')
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(2)
+    expect(document.querySelector('#alias-list .list__heading')).toBeNull()
+  })
+
+  it('una ricerca che non trova niente lo dice, e un errore non si spaccia per nessun risultato', async () => {
+    await startPopup({ SEARCH_ALIASES: () => [] })
+    const search = document.getElementById('search')
+    search.value = 'zzz'
+    search.dispatchEvent(new Event('input'))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(document.getElementById('list-empty').textContent).toContain('Nothing matching "zzz"')
+
+    await startPopup({
+      SEARCH_ALIASES: () => {
+        throw new Error('boom')
+      },
+    })
+    const again = document.getElementById('search')
+    again.value = 'zzz'
+    again.dispatchEvent(new Event('input'))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(document.getElementById('list-empty').textContent).not.toContain('Nothing matching')
   })
 
   it('copiare un alias senza sito lo associa a quello che si sta guardando', async () => {
@@ -171,7 +206,7 @@ describe('il popup', () => {
 
     document.querySelector('#alias-list .row').click()
     await settle()
-    document.querySelector('.address .icon-button').click()
+    document.querySelector('.address-copy').click()
     await settle()
     await settle()
 
@@ -184,7 +219,7 @@ describe('il popup', () => {
 
     document.querySelector('#alias-list .row').click()
     await settle()
-    document.querySelector('.address .icon-button').click()
+    document.querySelector('.address-copy').click()
     await settle()
     await settle()
 
@@ -210,12 +245,12 @@ describe('il popup', () => {
     expect(rows[1].classList.contains('is-off')).toBe(true)
   })
 
-  it('senza niente scelto la colonna di destra invita, non resta vuota', async () => {
-    await startPopup()
+  it('senza nessun alias la colonna di destra invita, non resta vuota', async () => {
+    await startPopup({ RECENT_ALIASES: () => [], ALIASES_FOR_SITE: () => [] })
 
     const blank = document.querySelector('#detail .blank')
     expect(blank).not.toBeNull()
-    expect(blank.textContent).toContain('Pick an alias')
+    expect(blank.textContent).toContain('No aliases yet')
   })
 
   it('scegliere una riga apre il dettaglio con indirizzo, nota e data', async () => {
@@ -275,10 +310,10 @@ describe('il popup', () => {
     await settle()
 
     expect(fake.sent.some((m) => m.type === 'DELETE_ALIAS')).toBe(false)
-    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(1)
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(2)
   })
 
-  it('cancella quando si conferma, e la colonna di destra torna vuota', async () => {
+  it('cancella quando si conferma, e la scelta passa al prossimo', async () => {
     const fake = await startPopup()
 
     document.querySelector('#alias-list .row').click()
@@ -292,8 +327,9 @@ describe('il popup', () => {
     await settle()
 
     expect(fake.sent).toContainEqual({ type: 'DELETE_ALIAS', id: 'a1' })
-    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(0)
-    expect(document.querySelector('#detail .blank')).not.toBeNull()
+    expect(document.querySelectorAll('#alias-list .row')).toHaveLength(1)
+    expect(document.querySelector('#alias-list .row').dataset.id).toBe('a2')
+    expect(document.querySelector('#detail .detail')).not.toBeNull()
   })
 
   it('la ricerca chiede al contesto di sfondo e ridisegna', async () => {
@@ -324,6 +360,23 @@ describe('il popup', () => {
     expect(withIcon.dataset.site).toBe('example.com')
     expect(withIcon.querySelector('img')?.getAttribute('src')).toBe(PIXEL)
     expect(withIcon.classList.contains('has-icon')).toBe(true)
+  })
+
+  it('un icona appena messa in coda si ricontrolla da sola', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let calls = 0
+    const fake = await startPopup({
+      SITE_ICONS: () => (++calls === 1 ? { icons: {}, pending: ['example.com'] } : { icons: { 'example.com': PIXEL }, pending: [] }),
+    })
+    await settle()
+    expect(document.querySelector('#alias-list .row__badge img')).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(3000)
+    await settle()
+
+    expect(fake.sent.filter((m) => m.type === 'SITE_ICONS')).toHaveLength(2)
+    expect(document.querySelector('#alias-list .row__badge img')?.getAttribute('src')).toBe(PIXEL)
+    vi.useRealTimers()
   })
 
   it('senza icona resta la lettera, non un quadrato vuoto', async () => {
@@ -393,5 +446,112 @@ describe('il popup', () => {
 
     expect(document.getElementById('screen-signin').hidden).toBe(false)
     expect(document.getElementById('screen-main').hidden).toBe(true)
+  })
+
+  describe('impostazioni', () => {
+    it('le sezioni si cambiano con le schede e una sola e visibile', async () => {
+      await startPopup()
+      document.getElementById('tab-look').click()
+
+      const visible = [...document.querySelectorAll('.spanel')].filter((panel) => !panel.hidden)
+      expect(visible.map((panel) => panel.dataset.panel)).toEqual(['look'])
+      expect(document.getElementById('tab-look').getAttribute('aria-selected')).toBe('true')
+      expect(document.getElementById('tab-pages').getAttribute('aria-selected')).toBe('false')
+    })
+
+    it('mette in pausa il sito davanti e lo riattiva', async () => {
+      const fake = await startPopup({ GET_STATE: () => ({ ...baseState(), pausedSites: [] }) })
+
+      document.getElementById('pause-here').click()
+      await settle()
+      expect(fake.sent).toContainEqual({ type: 'SET_SETTINGS', patch: { pausedSites: ['example.com'] } })
+    })
+
+    it('il tema si sceglie con i tre tasti affiancati', async () => {
+      const fake = await startPopup()
+      const dark = document.querySelector('input[name="opt-theme"][value="dark"]')
+      dark.checked = true
+      dark.dispatchEvent(new Event('change'))
+      await settle()
+
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+      expect(fake.sent).toContainEqual({ type: 'SET_SETTINGS', patch: { theme: 'dark' } })
+    })
+
+    it('svuota la cache delle icone', async () => {
+      const fake = await startPopup()
+      document.getElementById('clear-icons').click()
+      await settle()
+      expect(fake.sent.some((m) => m.type === 'CLEAR_ICONS')).toBe(true)
+    })
+  })
+})
+
+describe('il popup su telefono', () => {
+  let query
+
+  beforeEach(() => {
+    query = globalThis.matchMedia
+    globalThis.matchMedia = (media) => ({
+      matches: media.includes('pointer: coarse'),
+      media,
+      addEventListener() {},
+      removeEventListener() {},
+    })
+    document.documentElement.classList.remove('mobile')
+  })
+
+  afterEach(() => {
+    globalThis.matchMedia = query
+    document.documentElement.classList.remove('mobile')
+  })
+
+  it('si mette in modalita mobile e parte dall elenco, senza il dettaglio', async () => {
+    await startPopup()
+    expect(document.documentElement.classList.contains('mobile')).toBe(true)
+    expect(document.getElementById('screen-main').dataset.view).toBe('list')
+  })
+
+  it('toccare una riga apre il dettaglio, e Indietro torna all elenco', async () => {
+    await startPopup()
+    document.querySelector('.row').click()
+    expect(document.getElementById('screen-main').dataset.view).toBe('detail')
+    document.querySelector('.detail__back').click()
+    expect(document.getElementById('screen-main').dataset.view).toBe('list')
+  })
+
+  it('cancellare un alias riporta all elenco', async () => {
+    await startPopup()
+    document.querySelector('.row').click()
+    document.querySelector('.detail__foot .button--danger').click()
+    ;[...document.querySelectorAll('.detail__foot .button')].find((b) => /for good/.test(b.textContent)).click()
+    await settle()
+    expect(document.getElementById('screen-main').dataset.view).toBe('list')
+  })
+
+  it('non porta la tastiera sul campo della nota dopo aver creato un alias', async () => {
+    await startPopup({ CREATE_ALIAS: () => ({ id: 'n1', email: 'new.alias@skudo.me', description: '', site: '', active: true }) })
+    document.getElementById('create').click()
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(document.getElementById('screen-main').dataset.view).toBe('detail')
+    expect(document.activeElement?.id).not.toBe('detail-note')
+  })
+
+  it('su desktop non c e nessuna classe mobile e il dettaglio e sempre a fianco', async () => {
+    globalThis.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
+    await startPopup()
+    expect(document.documentElement.classList.contains('mobile')).toBe(false)
+  })
+})
+
+describe('l icona nei campi si accende dal permesso', () => {
+  it('"Turn it on" nel popup chiede lo sfondo di accendere l icona anche nelle schede aperte', async () => {
+    const fake = await startPopup()
+    fake.api.permissions.request = async () => true
+    document.getElementById('opt-inject').checked = true
+    document.getElementById('opt-inject').dispatchEvent(new Event('change'))
+    await settle()
+    await settle()
+    expect(fake.sent.some((m) => m.type === 'ENABLE_FIELD_ICON')).toBe(true)
   })
 })

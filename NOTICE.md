@@ -58,6 +58,15 @@ The project asks, without requiring it, that any corrections found be
 contributed back: if we discover a missing domain group, an issue should be
 opened there.
 
+## Lucide (icons)
+
+The settings gear and the "new aliases" (at-sign) icon use path data from
+[Lucide](https://lucide.dev), ISC License, Copyright (c) for Lucide
+Contributors. Part of the Lucide icons derive from Feather, MIT License,
+Copyright (c) 2013-2022 Cole Bemis.
+
+---
+
 ---
 
 The full license texts need to be included in `dist/` before publishing on

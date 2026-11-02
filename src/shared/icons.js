@@ -50,26 +50,28 @@ const CACHE_KEY = 'iconCache'
 const HIT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 /**
- * Un buco, invece, si ricontrolla presto. Molto presto.
+ * Un buco si ricontrolla dopo cinque minuti.
  *
- * Il caso normale non e' "questo sito non ha un'icona": e' "l'abbiamo appena
- * messa in coda e fra un attimo ci sara'". Misurato dal vivo contro il
- * server di produzione (log del lavoratore della coda, due domini mai
- * richiesti prima): il job `FetchSiteIcon` finisce in 230-300ms. Anche
- * concedendo un sito lento (il limite totale del fetcher e' 6 secondi, fino
- * a 3 candidati) il caso peggiore reale sta sotto ai 20 secondi, non ai
- * minuti.
- *
- * Prima erano 15 minuti (che a loro volta avevano gia' sostituito un
- * precedente "poche ore", vedi il changelog): ancora troppo. Chi apre il
- * popup, vede la lettera, chiude, riapre trenta secondi dopo per controllare,
- * cioe' esattamente come si usa un'estensione e come si testa, restava
- * bloccato sulla stessa risposta "manca" per un quarto d'ora, anche con
- * l'icona gia' pronta sul server. Sembra rotta per sempre; non lo e', il
- * numero era solo troppo alto per come le persone aprono e chiudono un
- * popup davvero.
+ * Non e' questo numero a far comparire l'icona appena messa in coda: il
+ * server la prepara in 230-300 ms (misurato su produzione), e aspettare che
+ * scada un TTL per ritrovarla era il difetto, qualunque valore avesse. Quello
+ * lo fa `retry` qui sotto: chi ha appena chiesto un'icona ricontrolla da solo
+ * dopo pochi secondi. Il TTL serve solo a non martellare i siti che
+ * un'icona davvero non ce l'hanno.
  */
-const MISS_TTL_MS = 30 * 1000
+const MISS_TTL_MS = 5 * 60 * 1000
+
+/** Dopo quanto un'icona appena messa in coda si ricontrolla, e quante volte. */
+const RETRY_AFTER_MS = 2000
+const MAX_RETRIES = 3
+
+/**
+ * Quante richieste di preparazione si mandano per apertura.
+ *
+ * Il server ne accetta dieci al minuto per indirizzo. Mandarne venti
+ * significa farsene rifiutare dieci, e quelli non entrerebbero mai in coda.
+ */
+const MAX_REQUESTS = 8
 
 /**
  * Quante icone si tengono.
@@ -102,10 +104,20 @@ async function writeCache(cache) {
   await api.storage.local.set({ [CACHE_KEY]: cache })
 }
 
-function fresh(entry, now) {
+/**
+ * La voce si puo' usare cosi' com'e', senza andare in rete?
+ *
+ * Con `retry`, un buco appena messo in coda e' da ricontrollare: il server
+ * ha avuto il tempo di prepararlo. Si riscarica soltanto, senza chiedere di
+ * nuovo la preparazione.
+ */
+function fresh(entry, now, retry = false) {
   if (!entry || typeof entry.at !== 'number') return false
-  const ttl = entry.data ? HIT_TTL_MS : MISS_TTL_MS
-  return now - entry.at < ttl
+  if (entry.data) return now - entry.at < HIT_TTL_MS
+  if (retry && entry.asked && (entry.tries || 0) < MAX_RETRIES && now - entry.at >= RETRY_AFTER_MS) {
+    return false
+  }
+  return now - entry.at < MISS_TTL_MS
 }
 
 /**
@@ -172,7 +184,7 @@ async function requestFetch(domain) {
  * @param {{fetchMissing?: boolean}} options
  * @returns {Promise<Record<string, string|null>>} dominio registrabile -> data URL
  */
-export async function resolveIcons(sites, { fetchMissing = true } = {}) {
+export async function resolveIcons(sites, { fetchMissing = true, retry = false } = {}) {
   const roots = [...new Set(sites.map(registrableDomain).filter(Boolean))].slice(0, MAX_LOOKUPS)
 
   if (roots.length === 0) return {}
@@ -186,32 +198,54 @@ export async function resolveIcons(sites, { fetchMissing = true } = {}) {
     const hash = await iconHash(root)
     const entry = cache[hash]
 
-    if (fresh(entry, now)) {
+    if (fresh(entry, now, retry)) {
       result[root] = entry.data || null
       continue
     }
 
-    missing.push({ root, hash })
+    missing.push({ root, hash, entry })
   }
 
   if (missing.length === 0) return result
 
+  let requests = 0
+
   // Tutte insieme: vedi il commento in cima sul perche' non si caricano una
   // alla volta.
   await Promise.all(
-    missing.map(async ({ root, hash }) => {
+    missing.map(async ({ root, hash, entry }) => {
       const data = await download(hash)
+      const retrying = Boolean(entry && !entry.data && entry.asked)
 
-      cache[hash] = { data, at: now }
+      // Un buco gia' chiesto non si richiede: si e' solo riscaricato.
+      const ask = !data && fetchMissing && !retrying && requests++ < MAX_REQUESTS
+      if (ask) await requestFetch(root)
+
+      cache[hash] = data
+        ? { data, at: now }
+        : { data: null, at: now, asked: retrying ? true : ask, tries: retrying ? (entry.tries || 0) + 1 : 0 }
       result[root] = data
-
-      if (!data && fetchMissing) await requestFetch(root)
     })
   )
 
   await writeCache(cache)
 
   return result
+}
+
+/**
+ * Quali domini hanno ancora un buco che vale la pena ricontrollare.
+ * Serve a chi disegna per sapere se programmare un secondo giro.
+ */
+export async function pendingIcons(sites) {
+  const roots = [...new Set(sites.map(registrableDomain).filter(Boolean))].slice(0, MAX_LOOKUPS)
+  const cache = await readCache()
+  const pending = []
+  for (const root of roots) {
+    const entry = cache[await iconHash(root)]
+    if (entry && !entry.data && entry.asked && (entry.tries || 0) < MAX_RETRIES) pending.push(root)
+  }
+  return pending
 }
 
 /** Butta via tutto. Usato quando si scollega l'account. */

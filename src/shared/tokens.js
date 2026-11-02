@@ -49,27 +49,29 @@
  */
 
 export const TOKENS = `
-  --ink: #16151F;
-  --ink-soft: #3B3A4B;
-  --muted: #5E5C72;
+  --ink: #14151A;
+  --ink-soft: #383B45;
+  --muted: #5B5F6B;
   --paper: #FFFFFF;
-  --sunken: #F6F5FA;
-  --label: #F0EEF6;
-  --label-hover: #E7E4F1;
-  --hairline: rgba(22, 21, 31, .10);
-  --hairline-strong: rgba(22, 21, 31, .18);
+  --page: #FFFFFF;
+  --card: #FFFFFF;
+  --sunken: #F5F6F9;
+  --label: #EDF0F6;
+  --label-hover: #E1E6F0;
+  --hairline: rgba(20, 21, 26, .10);
+  --hairline-strong: rgba(20, 21, 26, .18);
 
-  --brand: #0B7A5E;
-  --brand-hover: #096A51;
+  --brand: #2147D1;
+  --brand-hover: #1A3AB0;
   --brand-ink: #ffffff;
-  --brand-wash: rgba(11, 122, 94, .10);
-  --signal: #C6EA33;
+  --brand-wash: rgba(33, 71, 209, .10);
+  --signal: #F5C400;
   --alarm: #C8372B;
 
   --shadow:
-    0 0 0 1px rgba(22, 21, 31, .07),
-    0 2px 4px rgba(22, 21, 31, .05),
-    0 18px 44px -14px rgba(22, 21, 31, .3);
+    0 0 0 1px rgba(20, 21, 26, .07),
+    0 2px 4px rgba(20, 21, 26, .05),
+    0 18px 44px -14px rgba(20, 21, 26, .3);
 
   --radius: 14px;
   --radius-sm: 8px;
@@ -88,29 +90,31 @@ export const TOKENS = `
  *
  * Non e' la tavolozza chiara invertita. Al buio le ombre non funzionano, non
  * c'e' luce da bloccare, quindi l'elevazione la fa un contorno chiaro e un
- * fondo piu' alto di quello sotto. E il verde va acceso: sotto una certa
- * luminosita' il bianco sopra smette di leggersi, e un verde spento su un fondo
+ * fondo piu' alto di quello sotto. E l'accento va acceso: sotto una certa
+ * luminosita' il bianco sopra smette di leggersi, e un accento spento su un fondo
  * scuro sparisce.
  */
 export const TOKENS_DARK = `
-  --ink: #ECEBF4;
-  --ink-soft: #C3C1D4;
-  --muted: #918EA9;
-  --paper: #17161F;
-  --sunken: #1C1B26;
-  --label: #232231;
-  --label-hover: #2D2C3D;
-  --hairline: rgba(236, 235, 244, .11);
-  --hairline-strong: rgba(236, 235, 244, .2);
+  --ink: #E9EAF0;
+  --ink-soft: #C2C5D2;
+  --muted: #8D91A3;
+  --paper: #14151A;
+  --page: #101115;
+  --card: #1D1E26;
+  --sunken: #191A21;
+  --label: #212432;
+  --label-hover: #2B2F42;
+  --hairline: rgba(233, 234, 240, .11);
+  --hairline-strong: rgba(233, 234, 240, .2);
 
-  --brand: #14B587;
-  --brand-hover: #1BCB99;
-  --brand-ink: #06231B;
-  --brand-wash: rgba(20, 181, 135, .15);
+  --brand: #7C97FF;
+  --brand-hover: #96ABFF;
+  --brand-ink: #0A1236;
+  --brand-wash: rgba(124, 151, 255, .16);
   --alarm: #F2796C;
 
   --shadow:
-    0 0 0 1px rgba(236, 235, 244, .11),
+    0 0 0 1px rgba(233, 234, 240, .11),
     0 2px 6px rgba(0, 0, 0, .55),
     0 22px 52px -16px rgba(0, 0, 0, .82);
 `

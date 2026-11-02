@@ -20,7 +20,8 @@
 
 import { addressNode } from './shared/address.js'
 import { api } from './shared/browser.js'
-import { registrableDomain } from './shared/domain.js'
+import { hostFromUrl, registrableDomain } from './shared/domain.js'
+import { parseServerTime } from './shared/time.js'
 
 /**
  * Attesa minima prima di mostrare il risultato della creazione.
@@ -33,9 +34,34 @@ import { registrableDomain } from './shared/domain.js'
  */
 const MIN_VISIBLE_WORK_MS = 450
 
-const SEARCH_DEBOUNCE_MS = 250
+const SEARCH_DEBOUNCE_MS = 200
+
+/** Righe che il server restituisce al massimo a un token dell'estensione. */
+const RESULT_LIMIT = 20
 
 const $ = (id) => document.getElementById(id)
+
+/**
+ * Telefono o tavoletta: si decide dal puntatore, non dalla larghezza.
+ *
+ * La larghezza di un popup desktop la scegliamo noi (600), quindi una media
+ * query sulla larghezza non distinguerebbe niente. Il puntatore grossolano e'
+ * quello che dice "si tocca con un dito", ed e' la cosa che cambia le misure.
+ * Il ripiego sul nome del browser copre i motori che non lo dichiarano.
+ * Va fatto prima di disegnare qualunque cosa, per non vedere il layout saltare.
+ */
+const MOBILE =
+  (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ||
+  /Android|Mobile|iPhone|iPad/i.test(globalThis.navigator?.userAgent || '')
+if (MOBILE) document.documentElement.classList.add('mobile')
+
+/** Su mobile l'elenco e il dettaglio sono due passaggi: quale dei due si vede. */
+function setView(view) {
+  if (!MOBILE) return
+  $('screen-main').dataset.view = view
+  if (view === 'list') $('detail').scrollTop = 0
+}
+
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 /* ------------------------------------------------------------------ *
@@ -45,8 +71,20 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
 let settings = null
 let site = ''
 let aliases = []
+
+/**
+ * L'elenco com'e' disegnato: sezioni con un titolo e le loro righe. `aliases` e'
+ * la stessa lista appiattita, nell'ordine in cui compare, ed e' quella su cui
+ * lavorano selezione e tastiera.
+ *
+ * @type {Array<{title: string, items: object[]}>}
+ */
+let groups = []
 let selectedId = null
 let searchTimer = null
+
+/** Il messaggio dell'ultimo caricamento fallito dell'elenco, o vuoto. */
+let listError = ''
 
 /** L'ultima richiesta vinta: vedi la guardia contro le risposte in ritardo. */
 let listRequest = 0
@@ -108,6 +146,7 @@ const PATHS = {
     'M5.5 15.5H5A1.5 1.5 0 0 1 3.5 14V5A1.5 1.5 0 0 1 5 3.5h9A1.5 1.5 0 0 1 15.5 5v.5',
   ],
   tick: ['m5 12.6 4.6 4.6L19.2 7.6'],
+  at: ['M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8', 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z'],
   mask: [
     'M3.6 8.4c3-1.2 5.7-1.2 8.4 0 2.7-1.2 5.4-1.2 8.4 0 0 5.4-2.1 8.4-4.5 8.4-1.6 0-2.7-1.1-3.9-2.6-1.2 1.5-2.3 2.6-3.9 2.6-2.4 0-4.5-3-4.5-8.4Z',
   ],
@@ -129,6 +168,9 @@ function applyTheme(theme) {
 }
 
 function showError(message) {
+  // L'errore vive sotto l'elenco: se si e' nel dettaglio, su mobile non si
+  // vedrebbe, quindi si torna all'elenco dove c'e'.
+  if (message) setView('list')
   const el = $('create-error')
   el.textContent = message || ''
   el.hidden = !message
@@ -141,12 +183,32 @@ function showError(message) {
 /** La parte prima della chiocciola: quella che distingue un alias da un altro. */
 const localPart = (email) => email.slice(0, email.lastIndexOf('@')) || email
 
-function aliasRow(alias) {
+/** Il segno di un alias: icona del sito se c'e', altrimenti l'iniziale. */
+function badgeFor(alias) {
+  const badge = document.createElement('span')
+  badge.className = 'row__badge'
+  badge.setAttribute('aria-hidden', 'true')
+
+  const root = registrableDomain(alias.site || '')
+  if (root) {
+    badge.textContent = localPart(alias.email).charAt(0)
+    badge.dataset.site = root
+    paintBadge(badge, root)
+  } else {
+    // Senza un sito non c'e' niente da riconoscere a colpo d'occhio, e una
+    // lettera a caso sembrava un'icona rotta: la chiocciola dice cos'e'.
+    badge.classList.add('row__badge--none')
+    badge.appendChild(icon(PATHS.at, 16))
+  }
+  return badge
+}
+
+function aliasRow(alias, { sibling = false } = {}) {
   const item = document.createElement('li')
 
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = alias.active ? 'row' : 'row is-off'
+  button.className = alias.active === false ? 'row is-off' : 'row'
   button.setAttribute('aria-selected', String(alias.id === selectedId))
   button.dataset.id = alias.id
 
@@ -157,15 +219,7 @@ function aliasRow(alias) {
   // l'icona: un'icona che non arriva (rete assente, sito senza favicon,
   // interruttore spento) lascia altrimenti un quadrato vuoto, e un elenco di
   // quadrati vuoti e' peggio di un elenco di lettere.
-  const badge = document.createElement('span')
-  badge.className = 'row__badge'
-  badge.textContent = localPart(alias.email).charAt(0)
-  badge.setAttribute('aria-hidden', 'true')
-
-  const root = registrableDomain(alias.site || '')
-  if (root) badge.dataset.site = root
-  paintBadge(badge, root)
-
+  const badge = badgeFor(alias)
   button.appendChild(badge)
 
   const text = document.createElement('span')
@@ -173,7 +227,7 @@ function aliasRow(alias) {
 
   const title = document.createElement('span')
   title.className = 'row__title'
-  title.textContent = localPart(alias.email)
+  highlight(title, localPart(alias.email))
   text.appendChild(title)
 
   const sub = document.createElement('span')
@@ -182,16 +236,129 @@ function aliasRow(alias) {
   // Su vons.com puo' comparire l'alias nato su safeway.com perche' e' lo
   // stesso account, ma senza scriverlo sarebbe un indirizzo apparso dal
   // nulla, e chi guarda non ha modo di capire perche' e' li'.
-  sub.textContent = elsewhere(alias)
-    ? `Saved on ${registrableDomain(alias.site)}`
-    : alias.description || alias.email.slice(alias.email.lastIndexOf('@'))
+  highlight(sub, subline(alias, sibling))
   text.appendChild(sub)
 
   button.appendChild(text)
-  button.addEventListener('click', () => select(alias.id))
+  button.addEventListener('click', () => {
+    select(alias.id)
+    setView('detail')
+  })
+  button.addEventListener('dblclick', () => copyAlias(alias, item.querySelector('.row__copy')))
 
   item.appendChild(button)
+
+  // Copiare e' l'operazione piu' frequente: sta sulla riga, senza dover
+  // aprire il dettaglio. E' un fratello del bottone e non un figlio, perche'
+  // un bottone dentro un bottone non e' HTML valido.
+  const copy = document.createElement('button')
+  copy.type = 'button'
+  copy.className = 'icon-button row__copy'
+  copy.title = 'Copy address'
+  copy.setAttribute('aria-label', `Copy ${alias.email}`)
+  copy.appendChild(icon(PATHS.copy, 15))
+  copy.addEventListener('click', () => copyAlias(alias, copy))
+  item.appendChild(copy)
+
   return item
+}
+
+/**
+ * La riga sotto il nome: quello che dice di piu' su quell'alias in questo
+ * momento. Se la ricerca ha trovato l'alias dal sito e non dalla nota, si
+ * mostra il sito: un risultato che non si capisce perche' sia li' sembra un
+ * errore.
+ */
+function subline(alias, sibling) {
+  if (sibling && elsewhere(alias)) return `Saved on ${registrableDomain(alias.site)}`
+
+  const query = $('search').value.trim().toLowerCase()
+  const note = alias.description || ''
+  if (query && alias.site && !note.toLowerCase().includes(query) && alias.site.includes(query)) {
+    return alias.site
+  }
+  return note || alias.site || alias.email.slice(alias.email.lastIndexOf('@'))
+}
+
+/**
+ * Il testo, con la parte che corrisponde alla ricerca in evidenza.
+ *
+ * Nodi di testo e <mark>, mai innerHTML: la nota di un alias e' testo
+ * dell'utente e puo' contenere qualunque cosa.
+ */
+function highlight(node, text) {
+  const query = $('search').value.trim().toLowerCase()
+  const at = query ? text.toLowerCase().indexOf(query) : -1
+  if (at < 0) {
+    node.textContent = text
+    return
+  }
+  const mark = document.createElement('mark')
+  mark.textContent = text.slice(at, at + query.length)
+  node.append(text.slice(0, at), mark, text.slice(at + query.length))
+}
+
+/** Copia un alias e mostra la spunta sul bottone che ha chiesto la copia. */
+function setCopyLabel(button, done) {
+  button.textContent = ''
+  if (button.classList.contains('address-copy')) {
+    button.appendChild(icon(done ? PATHS.tick : PATHS.copy, 16))
+    const label = document.createElement('span')
+    label.textContent = done ? 'Copied' : 'Copy address'
+    button.appendChild(label)
+    return
+  }
+  const size = button.classList.contains('row__copy') ? 15 : 16
+  button.appendChild(icon(done ? PATHS.tick : PATHS.copy, size))
+  button.title = done ? 'Copied' : 'Copy address'
+}
+
+/**
+ * Copia negli appunti, con un ripiego.
+ *
+ * Su alcuni browser per telefono `navigator.clipboard` esiste ma rifiuta dentro
+ * una pagina di estensione. `execCommand('copy')` da un campo selezionato
+ * funziona dentro un gesto dell'utente ovunque, ed e' quello che salva il tocco.
+ */
+async function writeClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    /* ripiego */
+  }
+  const field = document.createElement('textarea')
+  field.value = text
+  field.setAttribute('readonly', '')
+  field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px'
+  document.body.appendChild(field)
+  field.select()
+  field.setSelectionRange(0, text.length)
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  field.remove()
+  return ok
+}
+
+async function copyAlias(alias, button) {
+  if (!(await writeClipboard(alias.email))) {
+    // Il permesso puo' mancare: l'indirizzo resta selezionabile a mano, e
+    // fingere che sia andata sarebbe peggio che non dire niente.
+    return
+  }
+  rememberSiteFor(alias)
+  if (!button) return
+  clearTimeout(button._done)
+  button.dataset.done = 'true'
+  setCopyLabel(button, true)
+  button._done = setTimeout(() => {
+    button.dataset.done = 'false'
+    setCopyLabel(button, false)
+  }, 1600)
 }
 
 /**
@@ -223,53 +390,66 @@ function paintBadge(badge, root) {
  * efficiente e direbbe, a chi guarda il traffico, su quale riga si e' fermato
  * l'utente. Vedi il commento in cima a src/shared/icons.js.
  */
-async function loadIcons() {
+async function loadIcons(retry = false, attempt = 0) {
   if (!settings?.siteIcons) return
 
-  const sites = aliases.map((alias) => alias.site).filter(Boolean)
+  const sites = [...new Set(aliases.map((alias) => alias.site).filter(Boolean))]
   if (sites.length === 0) return
 
-  let resolved = {}
+  let reply
   try {
-    resolved = await send('SITE_ICONS', { sites })
+    reply = await send('SITE_ICONS', retry ? { sites, retry } : { sites })
   } catch {
     // Nessuna icona non e' un guasto: restano le lettere.
     return
   }
 
+  // Il contesto di sfondo risponde con `{ icons, pending }`; si accetta anche
+  // la mappa nuda, che e' la forma di prima.
+  const resolved = reply?.icons ?? reply ?? {}
   icons = { ...icons, ...resolved }
 
   for (const badge of document.querySelectorAll('.row__badge[data-site]')) {
     paintBadge(badge, badge.dataset.site)
   }
+
+  // Un'icona appena messa in coda arriva in pochi secondi: si ricontrolla
+  // invece di lasciare la lettera fino alla prossima apertura.
+  if (reply?.pending?.length && attempt < 3) {
+    setTimeout(() => loadIcons(true, attempt + 1), 2500)
+  }
 }
 
 function renderList() {
   const list = $('alias-list')
+  const scroll = list.scrollTop
   list.textContent = ''
-  for (const alias of aliases) list.appendChild(aliasRow(alias))
+
+  for (const group of groups) {
+    if (group.title) {
+      const heading = document.createElement('li')
+      heading.className = 'list__heading'
+      heading.textContent = group.title
+      heading.setAttribute('role', 'presentation')
+      list.appendChild(heading)
+    }
+    // "Saved on" vale solo dentro la sezione del sito: e' li' che un alias di
+    // un dominio fratello ha bisogno di dire da dove viene.
+    const sibling = Boolean(site) && group.title === `On ${site}`
+    for (const alias of group.items) list.appendChild(aliasRow(alias, { sibling }))
+  }
+  list.scrollTop = scroll
 
   const query = $('search').value.trim()
   const empty = $('list-empty')
-  empty.hidden = aliases.length > 0
-  empty.textContent = isSiteQuery(query)
-    ? `No alias for ${site} yet. Clear the box to see them all.`
+  // Senza alias e senza ricerca il pannello a destra lo dice gia' meglio.
+  empty.hidden = !listError && !(aliases.length === 0 && query)
+  empty.textContent = listError
+    ? `${listError} Try again in a moment.`
     : query
       ? `Nothing matching "${query}".`
       : 'No aliases yet.'
 }
-
-/**
- * La barra di ricerca contiene il sito corrente, cosi' come l'ha messa
- * l'apertura del popup?
- *
- * Serve a due cose. Con questa esatta parola cerchiamo per relazione
- * (`filter[site]`, che passa dall'indice cieco lato server) invece che per
- * testo, quindi l'elenco e' esatto e non "tutto cio' che contiene quelle
- * lettere". E il messaggio di elenco vuoto puo' dire come vedere tutto il
- * resto, che era proprio l'informazione che mancava.
- */
-const isSiteQuery = (query) => Boolean(site) && query === site
 
 /**
  * L'alias appartiene a un sito diverso da quello che si sta guardando?
@@ -336,28 +516,76 @@ async function loadList() {
 
   let next = []
   try {
-    if (isSiteQuery(query)) next = await send('ALIASES_FOR_SITE', { site, includeInactive: true })
-    else if (query) next = await send('SEARCH_ALIASES', { query })
-    else next = await send('RECENT_ALIASES')
+    if (query) {
+      const found = await send('SEARCH_ALIASES', { query })
+      next = [
+        {
+          // Il server restituisce al massimo venti righe: dirlo, altrimenti
+          // chi non trova un alias pensa che non esista.
+          title:
+            found.length >= RESULT_LIMIT
+              ? `First ${RESULT_LIMIT} matches. Keep typing to narrow it down`
+              : found.length === 1
+                ? '1 match'
+                : `${found.length} matches`,
+          items: found,
+        },
+      ]
+    } else {
+      const [here, recent] = await Promise.all([
+        site ? send('ALIASES_FOR_SITE', { site, includeInactive: true }) : [],
+        send('RECENT_ALIASES'),
+      ])
+      const known = new Set(here.map((alias) => alias.id))
+      const rest = recent.filter((alias) => !known.has(alias.id))
+      next = [
+        ...(here.length ? [{ title: `On ${site}`, items: here }] : []),
+        { title: here.length && rest.length ? 'Recent' : '', items: rest },
+      ]
+    }
   } catch (error) {
     if (thisRequest !== listRequest) return
     if (error.code === 'UNAUTHENTICATED') return show('signin')
-    next = []
+    // Un errore non e' "nessun risultato": dirlo come tale fa credere a chi
+    // cerca che l'alias non esista.
+    setGroups([])
+    listError = error.message || 'Could not load your aliases.'
+    renderList()
+    renderDetail()
+    return
   }
 
   if (thisRequest !== listRequest) return
+  listError = ''
+  setGroups(next.filter((group) => group.items.length || group.title))
 
-  aliases = next
-  if (!aliases.some((alias) => alias.id === selectedId)) selectedId = null
+  // Si apre con qualcosa di scelto: un pannello vuoto accanto a una lista
+  // piena e' un passo in piu' per ogni uso. Solo se non c'e' gia' una scelta.
+  if (!aliases.some((alias) => alias.id === selectedId)) selectedId = aliases[0]?.id ?? null
   renderList()
   renderDetail()
   loadIcons()
 }
 
-function select(id) {
+/** Imposta le sezioni e ricalcola la lista piatta. */
+function setGroups(next) {
+  groups = next
+  aliases = next.flatMap((group) => group.items)
+}
+
+function select(id, { scroll = false } = {}) {
   selectedId = id
   renderList()
   renderDetail()
+  if (scroll) document.querySelector('.row[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+}
+
+/** Sposta la scelta di una riga, dalla tastiera, senza togliere il fuoco dalla ricerca. */
+function moveSelection(step) {
+  if (aliases.length === 0) return
+  const at = aliases.findIndex((alias) => alias.id === selectedId)
+  const next = Math.min(aliases.length - 1, Math.max(0, at + step))
+  select(aliases[next].id, { scroll: true })
 }
 
 /* ------------------------------------------------------------------ *
@@ -388,43 +616,26 @@ function blank() {
   return wrap
 }
 
-/** Il blocco dell'indirizzo, con il bottone che lo copia. */
+/** L'indirizzo in grande, e sotto il bottone che lo copia. */
 function addressBlock(alias) {
   const wrap = document.createElement('div')
-  wrap.className = 'address'
-  wrap.appendChild(addressNode(alias.email))
+  wrap.className = 'address-wrap'
+
+  const block = document.createElement('div')
+  block.className = 'address'
+  block.appendChild(addressNode(alias.email))
+  wrap.appendChild(block)
 
   const copy = document.createElement('button')
   copy.type = 'button'
-  copy.className = 'icon-button'
-  copy.title = 'Copy'
+  copy.className = 'button button--primary address-copy'
   copy.setAttribute('aria-label', `Copy ${alias.email}`)
-  copy.appendChild(icon(PATHS.copy))
-  copy.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(alias.email)
-    } catch {
-      // Il permesso puo' mancare: l'indirizzo resta selezionabile a mano, e
-      // fingere che sia andata sarebbe peggio che non dire niente.
-      return
-    }
-    copy.dataset.done = 'true'
-    copy.textContent = ''
-    copy.appendChild(icon(PATHS.tick))
-    copy.title = 'Copied'
-    rememberSiteFor(alias)
-    setTimeout(() => {
-      copy.dataset.done = 'false'
-      copy.textContent = ''
-      copy.appendChild(icon(PATHS.copy))
-      copy.title = 'Copy'
-    }, 1600)
-  })
+  setCopyLabel(copy, false)
+  copy.addEventListener('click', () => copyAlias(alias, copy))
   wrap.appendChild(copy)
 
   return wrap
 }
-
 
 /** Una riga del blocco in fondo: etichetta a sinistra, valore o comando a destra. */
 function detailRow(label, value) {
@@ -446,7 +657,7 @@ function receivingToggle(alias) {
   toggle.setAttribute('aria-label', on ? 'Turn off' : 'Turn on')
 
   toggle.addEventListener('click', async () => {
-    const wanted = !alias.active
+    const wanted = alias.active === false
     try {
       await send('SET_ALIAS_ACTIVE', { id: alias.id, active: wanted })
     } catch (error) {
@@ -528,10 +739,11 @@ function deleteControl(alias, detail) {
       } catch (error) {
         return showError(error.message)
       }
-      aliases = aliases.filter((entry) => entry.id !== alias.id)
-      selectedId = null
+      setGroups(groups.map((group) => ({ ...group, items: group.items.filter((entry) => entry.id !== alias.id) })).filter((group) => group.items.length))
+      selectedId = aliases[0]?.id ?? null
       renderList()
       renderDetail()
+      setView('list')
     })
 
     row.append(keep, confirm)
@@ -549,11 +761,24 @@ function renderDetail() {
   const alias = aliases.find((entry) => entry.id === selectedId)
   if (!alias) {
     pane.appendChild(blank())
+    setView('list')
     return
   }
 
   const detail = document.createElement('div')
   detail.className = 'detail'
+
+  // "Indietro" esiste solo su mobile (il CSS lo nasconde altrove): li' il
+  // dettaglio copre l'elenco, e senza questo non c'e' modo di tornarci.
+  const back = document.createElement('button')
+  back.type = 'button'
+  back.className = 'detail__back'
+  back.appendChild(icon(['M15 5l-7 7 7 7'], 20))
+  const backLabel = document.createElement('span')
+  backLabel.textContent = 'Aliases'
+  back.appendChild(backLabel)
+  back.addEventListener('click', () => setView('list'))
+  detail.appendChild(back)
 
   /*
    * Niente etichetta sopra l'indirizzo.
@@ -565,12 +790,33 @@ function renderDetail() {
    */
   const head = document.createElement('div')
   head.className = 'detail__head'
+
+  // Chi e' questo alias, in una riga: il sito se lo conosciamo, e se riceve.
+  const who = document.createElement('div')
+  who.className = 'detail__who'
+  const badge = badgeFor(alias)
+  badge.classList.add('row__badge--lg')
+  const whoText = document.createElement('div')
+  whoText.className = 'detail__whotext'
+  const whoName = document.createElement('strong')
+  whoName.textContent = alias.site ? registrableDomain(alias.site) || alias.site : 'No site saved'
+  if (!alias.site) whoName.className = 'is-dim'
+  const whoState = document.createElement('span')
+  whoState.className = alias.active === false ? 'state state--off' : 'state'
+  whoState.textContent = alias.active === false ? 'Not receiving' : 'Receiving'
+  whoText.append(whoName, whoState)
+  who.append(badge, whoText)
+  head.appendChild(who)
+
   head.appendChild(addressBlock(alias))
   detail.appendChild(head)
 
-  const note = document.createElement('div')
+  const note = document.createElement('label')
   note.className = 'detail__block'
-  note.appendChild(noteField(alias))
+  const noteLabel = document.createElement('span')
+  noteLabel.className = 'detail__label'
+  noteLabel.textContent = 'Note'
+  note.append(noteLabel, noteField(alias))
   detail.appendChild(note)
 
   const rows = document.createElement('div')
@@ -596,7 +842,7 @@ function renderDetail() {
 }
 
 function formatDate(value) {
-  const date = new Date(value.replace(' ', 'T'))
+  const date = new Date(parseServerTime(value))
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
@@ -682,13 +928,17 @@ async function create() {
       await new Promise((resolve) => setTimeout(resolve, MIN_VISIBLE_WORK_MS - elapsed))
     }
 
-    aliases = [alias, ...aliases.filter((entry) => entry.id !== alias.id)]
+    const rest = groups.map((group) => ({ ...group, items: group.items.filter((entry) => entry.id !== alias.id) }))
+    setGroups([{ title: site ? `On ${site}` : '', items: [alias] }, ...rest.filter((group) => group.items.length)])
     selectedId = alias.id
     renderList()
     renderDetail()
     loadIcons()
-    // La nota e' l'unica cosa che resta da decidere: si parte da li'.
-    $('detail-note')?.focus()
+    // La nota e' l'unica cosa che resta da decidere: si parte da li'. Su
+    // mobile no: far salire la tastiera davanti all'indirizzo appena creato
+    // lo coprirebbe proprio quando serve copiarlo.
+    setView('detail')
+    if (!MOBILE) $('detail-note')?.focus()
   } catch (error) {
     // L'attesa non e' un errore: non si scrive in rosso, si mostra sul bottone.
     if (error.code !== 'COOLDOWN') showError(error.message)
@@ -746,14 +996,24 @@ function onInjectToggle(event) {
     return
   }
 
+  // Su Chromium il popup si chiude appena compare la richiesta di permesso:
+  // il `.then` qui sotto non gira mai, e l'interruttore restava spento anche
+  // dopo aver concesso. Quindi l'intenzione si salva *prima*, senza aspettarla
+  // (niente `await` prima di `request`: vedi sopra). Il contesto di sfondo
+  // registra lo script appena arriva il permesso (`permissions.onAdded`).
+  patch('injectIcon', true)
+
   api.permissions
     .request({ origins: ['<all_urls>'] })
     .then((granted) => {
       $('opt-inject').checked = granted
-      return patch('injectIcon', granted)
+      if (!granted) return patch('injectIcon', false)
+      // Registra lo script e lo mette nelle schede gia' aperte.
+      return send('ENABLE_FIELD_ICON').catch(() => {})
     })
     .catch(() => {
       $('opt-inject').checked = false
+      patch('injectIcon', false)
     })
 }
 
@@ -763,11 +1023,9 @@ function onInjectToggle(event) {
 
 async function currentSite() {
   const [tab] = await api.tabs.query({ active: true, currentWindow: true })
-  try {
-    return new URL(tab.url).hostname.replace(/^www\./, '')
-  } catch {
-    return ''
-  }
+  // Solo i siti veri: `chrome://newtab` ha host `newtab`, che non e' un sito e
+  // non deve finire ne' nell'intestazione ne' in una richiesta al server.
+  return hostFromUrl(tab?.url)
 }
 
 async function init() {
@@ -779,7 +1037,12 @@ async function init() {
   $('opt-associate').checked = settings.associateSite
   $('opt-icons').checked = settings.siteIcons
   $('opt-format').value = settings.format
-  $('opt-theme').value = settings.theme
+  for (const radio of document.querySelectorAll('input[name="opt-theme"]')) {
+    radio.checked = radio.value === settings.theme
+  }
+  const version = api.runtime.getManifest?.().version
+  $('about-version').textContent = version ? `v${version}` : ''
+  renderShortcut()
   $('opt-inject').checked =
     settings.injectIcon && (await api.permissions.contains({ origins: ['<all_urls>'] }))
 
@@ -790,11 +1053,11 @@ async function init() {
 
   site = await currentSite()
   $('site').textContent = site
-  // Il sito parte scritto nella barra: e' un filtro, e un filtro si vede e
-  // si cancella. Prima era uno stato implicito del popup, e l'unico modo di
-  // uscirne era scrivere qualcos'altro sopra.
-  if (site) $('search').value = site
+  // Il sito non finisce piu' nella barra di ricerca: li' sembrava un filtro
+  // che nasconde il resto, e la ricerca sembrava rotta. Ora e' una sezione
+  // dell'elenco, sopra gli altri alias.
   syncSearchClear()
+  renderPaused()
   show('main')
 
   await loadList()
@@ -803,6 +1066,8 @@ async function init() {
 }
 
 /* Eventi ------------------------------------------------------------ */
+
+$('settings-back').addEventListener('click', () => show(settings?.signedIn ? 'main' : 'signin'))
 
 $('settings-toggle').addEventListener('click', () => {
   const open = !$('screen-settings').hidden
@@ -835,6 +1100,21 @@ $('search').addEventListener('input', () => {
   searchTimer = setTimeout(loadList, SEARCH_DEBOUNCE_MS)
 })
 
+$('search').addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') moveSelection(1)
+  else if (event.key === 'ArrowUp') moveSelection(-1)
+  else if (event.key === 'Enter') {
+    const alias = aliases.find((entry) => entry.id === selectedId)
+    if (alias) copyAlias(alias, document.querySelector('.row[aria-selected="true"] + .row__copy'))
+  } else if (event.key === 'Escape' && event.target.value) {
+    // Esc svuota; se e' gia' vuota lascia che il browser chiuda il popup.
+    event.preventDefault()
+    $('search-clear').click()
+    return
+  } else return
+  event.preventDefault()
+})
+
 $('search-clear').addEventListener('click', () => {
   const field = $('search')
   field.value = ''
@@ -858,9 +1138,129 @@ $('opt-icons').addEventListener('change', async (e) => {
 })
 $('opt-domain').addEventListener('change', (e) => patch('domain', e.target.value))
 $('opt-format').addEventListener('change', (e) => patch('format', e.target.value))
-$('opt-theme').addEventListener('change', (e) => {
-  applyTheme(e.target.value)
-  patch('theme', e.target.value)
+for (const radio of document.querySelectorAll('input[name="opt-theme"]')) {
+  radio.addEventListener('change', () => {
+    if (!radio.checked) return
+    applyTheme(radio.value)
+    patch('theme', radio.value)
+  })
+}
+
+/* Sezioni ------------------------------------------------------------ */
+
+function openTab(name) {
+  for (const tab of document.querySelectorAll('.snav [data-tab]')) {
+    tab.setAttribute('aria-selected', String(tab.dataset.tab === name))
+  }
+  for (const panel of document.querySelectorAll('.spanel')) {
+    panel.hidden = panel.dataset.panel !== name
+  }
+}
+
+for (const tab of document.querySelectorAll('.snav [data-tab]')) {
+  tab.addEventListener('click', () => openTab(tab.dataset.tab))
+}
+
+// Frecce su e giu' passano da una sezione all'altra, come in ogni elenco di
+// schede.
+$('screen-settings').querySelector('.snav').addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+  const tabs = [...document.querySelectorAll('.snav [data-tab]')]
+  const here = tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true')
+  const next = tabs[(here + (event.key === 'ArrowDown' ? 1 : -1) + tabs.length) % tabs.length]
+  openTab(next.dataset.tab)
+  next.focus()
+  event.preventDefault()
 })
+
+/* Scorciatoia -------------------------------------------------------- */
+
+async function renderShortcut() {
+  const box = $('shortcut-keys')
+  box.textContent = ''
+  let shortcut = ''
+  try {
+    const commands = await api.commands?.getAll?.()
+    shortcut = commands?.find((command) => command.name === 'create_alias')?.shortcut || ''
+  } catch {
+    /* si mostra come non impostata */
+  }
+
+  if (!shortcut) {
+    box.textContent = 'Not set'
+    box.classList.add('keys--none')
+    return
+  }
+  box.classList.remove('keys--none')
+  for (const key of shortcut.split(/\+/)) {
+    const cap = document.createElement('kbd')
+    cap.textContent = key
+    box.appendChild(cap)
+  }
+}
+
+$('shortcut-change').addEventListener('click', async () => {
+  try {
+    // Firefox ha una chiamata apposta; su Chromium la pagina si apre da una scheda.
+    if (api.commands?.openShortcutSettings) await api.commands.openShortcutSettings()
+    else await api.tabs.create({ url: 'chrome://extensions/shortcuts' })
+  } catch {
+    /* il browser non lo permette: resta il comando scritto accanto */
+  }
+})
+
+/* Siti in pausa ------------------------------------------------------ */
+
+function renderPaused() {
+  const list = $('paused-list')
+  list.textContent = ''
+  const paused = settings?.pausedSites || []
+
+  for (const host of paused) {
+    const item = document.createElement('li')
+    const name = document.createElement('span')
+    name.textContent = host
+    const resume = document.createElement('button')
+    resume.type = 'button'
+    resume.className = 'chip-button'
+    resume.textContent = 'Resume'
+    resume.setAttribute('aria-label', `Resume on ${host}`)
+    resume.addEventListener('click', async () => {
+      await patch('pausedSites', paused.filter((entry) => entry !== host))
+      renderPaused()
+    })
+    item.append(name, resume)
+    list.appendChild(item)
+  }
+
+  $('paused-empty').hidden = paused.length > 0
+  $('pause-here').hidden = !site || paused.includes(site)
+  $('pause-here').textContent = site ? `Pause on ${site}` : 'Pause here'
+}
+
+$('pause-here').addEventListener('click', async () => {
+  const paused = settings?.pausedSites || []
+  if (!site || paused.includes(site)) return
+  await patch('pausedSites', [...paused, site])
+  renderPaused()
+})
+
+/* Cache delle icone e account --------------------------------------- */
+
+$('clear-icons').addEventListener('click', async (event) => {
+  const button = event.currentTarget
+  try {
+    await send('CLEAR_ICONS')
+  } catch {
+    return
+  }
+  icons = {}
+  renderList()
+  loadIcons()
+  button.textContent = 'Cleared'
+  setTimeout(() => (button.textContent = 'Clear'), 1600)
+})
+
+$('open-app').addEventListener('click', () => send('OPEN_APP').catch(() => {}))
 
 init()

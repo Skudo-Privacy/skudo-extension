@@ -30,12 +30,26 @@
 
 :root {
   --popup-width: 600px;
-  --popup-height: 430px;
-  --bar-height: 44px;
-  --list-width: 232px;
+  --popup-height: 480px;
+  --bar-height: 54px;
+  --list-width: 246px;
 }
 
 * { box-sizing: border-box; margin: 0; }
+
+/* Un `display` scritto qui sotto vince su `hidden`: senza questo, i bottoni e i
+   pannelli nascosti restano visibili. */
+[hidden] { display: none !important; }
+
+/* Barre di scorrimento sottili, dello stesso colore delle linee: quelle native
+   sono grosse quanto un terzo della colonna dell'elenco. */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--hairline-strong) transparent; }
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-button { display: none; }
 
 html,
 body {
@@ -94,7 +108,7 @@ body {
 .screen[hidden] { display: none; }
 .screen--split { display: flex; }
 .screen--center { display: grid; place-items: center; padding: 24px; }
-.screen--settings { display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow-y: auto; }
+.screen--settings { display: flex; flex-direction: column; }
 
 .prompt { max-width: 42ch; text-align: center; }
 .prompt h1 { font-size: 20px; font-weight: 620; letter-spacing: -.026em; margin-bottom: 8px; }
@@ -143,7 +157,8 @@ body {
   -webkit-appearance: none;
   appearance: none;
 }
-.search input:focus { outline: none; }
+.search input:focus,
+.search input:focus-visible { outline: none; box-shadow: none; }
 /* Nasconde la crocetta nativa di Chromium: la nostra e' l'unica, cosi' il
    campo si comporta allo stesso modo nei due browser. */
 .search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
@@ -201,7 +216,6 @@ body {
   cursor: pointer;
   transition: background-color var(--fast) var(--ease);
 }
-.list li + li .row { box-shadow: inset 0 1px 0 var(--hairline); }
 .row:hover { background: var(--sunken); }
 .row:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .row[aria-selected='true'] { background: var(--label); }
@@ -281,6 +295,45 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Il titolo di una sezione dell'elenco. */
+.list__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 13px 5px;
+  background: var(--paper);
+  font-size: 10.5px;
+  font-weight: 620;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  box-shadow: 0 1px 0 var(--hairline);
+}
+.list__heading ~ .list__heading { margin-top: 0; }
+.list li { position: relative; }
+
+/* Il testo che corrisponde alla ricerca. */
+.row mark { background: color-mix(in srgb, var(--signal) 42%, transparent); color: inherit; border-radius: 2px; }
+
+/* Copia sulla riga: compare al passaggio, alla selezione e col fuoco. */
+.row__copy {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  transform: translateY(-50%);
+  opacity: 0;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--hairline);
+}
+li:hover > .row__copy,
+.row[aria-selected='true'] + .row__copy,
+.row__copy:focus-visible,
+.row__copy[data-done='true'] { opacity: 1; }
+.row__copy[data-done='true'] { color: var(--brand); }
+.row__text { padding-right: 20px; }
 
 /* Spento: l'indirizzo resta leggibile, ma si vede che non riceve. */
 .row.is-off .row__title { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
@@ -512,24 +565,6 @@ select:focus-visible {
   box-shadow: inset 0 -2px 0 var(--brand);
 }
 
-/* Impostazioni ------------------------------------------------------ */
-
-.settings { padding: 14px 16px 16px; }
-.settings + .settings { border-left: 1px solid var(--hairline); }
-
-.switch {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--hairline);
-  cursor: pointer;
-}
-.switch:last-of-type { border-bottom: 0; }
-.switch input { margin: 2px 0 0; accent-color: var(--brand); width: 15px; height: 15px; flex: none; }
-.switch strong { display: block; font-size: 12.5px; font-weight: 600; }
-.switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-
 /* Varie ------------------------------------------------------------- */
 
 .error { margin-top: 8px; color: var(--alarm); font-size: 11.5px; }
@@ -561,3 +596,541 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important }
 }
+
+
+/* Dettaglio: chi e' l'alias ----------------------------------------- */
+
+.detail__who { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+.row__badge--lg { width: 36px; height: 36px; border-radius: 11px; font-size: 15px; }
+.row__badge--lg img { width: 22px; height: 22px; }
+.detail__whotext { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.detail__whotext strong { font-size: 14px; font-weight: 600; letter-spacing: -.016em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail__whotext .is-dim { color: var(--muted); font-weight: 500; }
+.state { font-size: 11.5px; color: var(--muted); }
+.state::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+  vertical-align: 1px;
+}
+.state--off::before { background: var(--hairline-strong); }
+.detail__block { display: block; }
+.detail__block .detail__label { margin-bottom: 5px; }
+
+/* Cancellare e' raro e non si annulla: sta in fondo, senza cornice, cosi' non
+   compete con la copia. La conferma, invece, ha i bordi. */
+.detail__foot { justify-content: flex-start; }
+.detail__foot > .button--danger { min-height: 30px; padding: 0 8px; margin-left: -8px; box-shadow: none; font-weight: 500; font-size: 12.5px; }
+.detail__foot > .button--danger:hover { background: color-mix(in srgb, var(--alarm) 9%, transparent); }
+.detail__foot.row-actions { justify-content: flex-end; }
+
+
+/* Impostazioni, rifatte ---------------------------------------------- */
+
+.settings__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 8px;
+}
+.settings__head h1 { font-size: 16px; font-weight: 650; letter-spacing: -.03em; }
+.settings__head .icon-button { border-radius: var(--r-pill); }
+
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 6px; }
+.pair .field { margin-bottom: 0; }
+
+/* Gli interruttori sono caselle vere, ridisegnate: tastiera, lettori di
+   schermo e `checked` restano quelli del browser. */
+.switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+  position: relative;
+}
+.group .switch:last-child { border-bottom: 0; }
+.switch input { position: absolute; opacity: 0; width: 34px; height: 20px; margin: 0; cursor: pointer; }
+.switch__track {
+  flex: none;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: var(--hairline-strong);
+  transition: background-color var(--fast) var(--ease);
+}
+.switch__track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+  transition: transform var(--fast) var(--ease);
+}
+.switch input:checked + .switch__track { background: var(--brand); }
+.switch input:checked + .switch__track::after { transform: translateX(14px); }
+.switch input:focus-visible + .switch__track { outline: 2px solid var(--brand); outline-offset: 2px; }
+.switch__text { min-width: 0; }
+.switch strong { display: block; font-size: 12.5px; font-weight: 600; }
+.switch small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+
+/* ================================================================== *
+ * Rifacimento: carta su fondo, tondo, con il cobalto e il giallo.
+ *
+ * Il fondo di tutto e' `--page`, un bianco caldo; le cose che si toccano sono
+ * carte bianche con un bordo sottile, raggi grandi e bottoni a pillola. La
+ * gerarchia la fanno la dimensione e il peso, non le ombre.
+ * ================================================================== */
+
+body { background: var(--page); }
+:root { --r-card: 16px; --r-pill: 999px; }
+
+.bar { border-bottom: 0; padding: 0 12px 0 16px; gap: 9px; }
+.bar__mark { width: 26px; height: 26px; border-radius: 8px; }
+.bar__name { font-size: 16px; font-weight: 650; letter-spacing: -.03em; }
+.bar__site {
+  flex: 0 1 auto;
+  margin-left: auto;
+  max-width: 58%;
+  padding: 4px 11px;
+  border-radius: var(--r-pill);
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+.bar__site:empty { display: none; }
+.bar .icon-button { width: 34px; height: 34px; border-radius: var(--r-pill); color: var(--ink-soft); }
+.bar .icon-button:hover,
+.bar .icon-button[aria-expanded='true'] { background: var(--card); color: var(--ink); }
+
+.screen--split { gap: 10px; padding: 0 12px 12px; }
+.pane--list { width: var(--list-width); border-right: 0; }
+
+/* Ricerca a pillola */
+.search {
+  height: 42px;
+  padding: 0 8px 0 15px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  transition: box-shadow var(--fast) var(--ease);
+}
+.search:focus-within { box-shadow: inset 0 0 0 2px var(--brand), 0 0 0 4px var(--brand-wash); }
+.search input { font-size: 13px; }
+
+/* Righe: ciascuna una carta */
+.list { margin-top: 4px; padding: 0 0 4px; }
+.list li { margin-bottom: 5px; }
+.row {
+  padding: 9px 12px 9px 10px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--hairline) !important;
+  transition: box-shadow var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+.row:hover { background: var(--card); box-shadow: inset 0 0 0 1px var(--hairline-strong) !important; }
+.row[aria-selected='true'] { background: var(--card); box-shadow: inset 0 0 0 2px var(--brand) !important; }
+.row[aria-selected='true']::before { display: none; }
+.row:focus-visible { outline-offset: 1px; border-radius: 14px; }
+.row__badge { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; }
+.row__title { font-size: 13px; font-weight: 600; }
+.row__sub { font-size: 11.5px; }
+.row__copy { right: 9px; border-radius: var(--r-pill); }
+
+.list__heading {
+  top: 0;
+  padding: 10px 4px 6px;
+  background: var(--page);
+  box-shadow: none;
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+li.list__heading { margin-bottom: 0; }
+
+.pane__foot { padding: 8px 0 0; border-top: 0; }
+.pane__foot .button { min-height: 44px; border-radius: var(--r-pill); font-size: 14px; font-weight: 620; }
+
+/* Dettaglio: una carta grande */
+.pane--detail {
+  background: var(--card);
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.detail { padding: 18px 18px 16px; }
+.detail__who { margin-bottom: 14px; }
+.row__badge--lg { width: 42px; height: 42px; border-radius: 13px; font-size: 17px; }
+.row__badge--lg img { width: 24px; height: 24px; }
+.detail__whotext strong { font-size: 16px; font-weight: 650; letter-spacing: -.025em; }
+
+.address-wrap { display: grid; gap: 10px; }
+.address {
+  display: block;
+  padding: 16px 16px;
+  border-radius: var(--r-card);
+  background: var(--page);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.address__text { font-size: 14.5px; line-height: 1.5; }
+.address-copy { min-height: 42px; border-radius: var(--r-pill); font-size: 13.5px; font-weight: 620; }
+.address-copy[data-done='true'] { background: var(--ink); color: var(--paper); }
+
+.detail__label { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+input[type='text'], select { border-radius: 12px; min-height: 40px; background: var(--page); box-shadow: inset 0 0 0 1px var(--hairline); }
+input[type='text']:focus-visible, select:focus-visible { box-shadow: inset 0 0 0 2px var(--brand); }
+.detail__rows { border-top: 0; margin-top: 14px; }
+.detail__row { padding: 12px 2px; }
+
+.state::before { background: var(--brand); }
+
+/* Stato vuoto: un tondo giallo con la maschera dentro */
+.blank svg {
+  box-sizing: content-box;
+  padding: 20px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: var(--signal);
+  color: #14151A;
+  stroke-width: 1.7;
+}
+.blank h2 { font-size: 17px; font-weight: 650; letter-spacing: -.03em; margin-bottom: 6px; }
+.blank p { font-size: 13px; color: var(--ink-soft); }
+
+/* Impostazioni: gruppi in carta */
+.settings__head { border-bottom: 0; padding: 0 12px 0 8px; height: 44px; }
+.settings__head h1 { font-size: 16px; font-weight: 650; letter-spacing: -.03em; }
+.settings__head .icon-button { border-radius: var(--r-pill); }
+.settings__body { gap: 10px; padding: 2px 12px 12px; }
+.settings__col { padding: 4px 16px 10px; background: var(--card); border-radius: 20px; box-shadow: inset 0 0 0 1px var(--hairline); }
+.settings__col + .settings__col { border-left: 0; }
+.group__title { font-size: 11px; letter-spacing: .04em; }
+
+/* Accesso */
+.prompt h1 { font-size: 24px; font-weight: 650; letter-spacing: -.035em; }
+.prompt p { font-size: 13.5px; color: var(--ink-soft); }
+.prompt .button { border-radius: var(--r-pill); min-height: 44px; font-size: 14px; }
+
+
+/* Misure, seconda passata ------------------------------------------- */
+.row { padding: 8px 12px 8px 9px; gap: 10px; }
+.row__badge { width: 30px; height: 30px; }
+.list li { margin-bottom: 4px; }
+.detail { padding: 16px 16px 12px; }
+.detail__who { margin-bottom: 12px; }
+.address { padding: 14px 16px; }
+.address-wrap { gap: 8px; }
+.address-copy { min-height: 40px; }
+.detail__block { margin-top: 14px; }
+.detail__rows { margin-top: 10px; }
+.detail__row { padding: 10px 0; }
+.detail__row:last-child { border-bottom: 0; }
+.detail__foot { margin-top: 6px; }
+.pane--detail { overflow-x: hidden; }
+
+.list { -webkit-mask-image: linear-gradient(#000 calc(100% - 16px), transparent); mask-image: linear-gradient(#000 calc(100% - 16px), transparent); }
+.button__plus { flex: none; margin-left: -2px; }
+#create[aria-disabled='true'] .button__plus,
+#create:disabled .button__plus { display: none; }
+
+
+/* Impostazioni: barra a sinistra, pannello a destra ------------------- */
+
+.screen--settings { padding: 0 12px 12px; }
+.settings__layout { flex: 1; min-height: 0; display: flex; gap: 10px; }
+
+.snav { flex: none; width: 138px; display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.snav button {
+  display: block;
+  width: 100%;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.snav button:hover { background: var(--sunken); color: var(--ink); }
+.snav button[aria-selected='true'] { background: var(--brand-wash); color: var(--brand); font-weight: 620; }
+.snav button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+.spanels {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px 20px 16px;
+  border-radius: 20px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.spanel__title { font-size: 17px; font-weight: 650; letter-spacing: -.03em; }
+.spanel__lead { margin: 2px 0 8px; color: var(--muted); font-size: 12px; }
+
+.srow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.srow__text { flex: 1; min-width: 0; }
+.srow strong, .paused__head strong, .account strong { display: block; font-size: 12.5px; font-weight: 600; }
+.srow small, .account small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+
+.chip-button {
+  flex: none;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.chip-button:hover { background: var(--sunken); }
+.chip-button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.keys { display: inline-flex; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.keys kbd {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--hairline-strong), 0 1px 0 var(--hairline-strong);
+  color: var(--ink);
+  font: 500 11px/1.4 var(--mono);
+  text-align: center;
+}
+
+.paused { padding-top: 12px; }
+.paused__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.paused__list { margin: 6px 0 0; padding: 0; list-style: none; }
+.paused__list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 6px 12px; border-radius: 12px; font-size: 12.5px; }
+.paused__list li:hover { background: var(--sunken); }
+.paused__list li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paused__empty { margin-top: 4px; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+
+/* Tema: tre scelte affiancate */
+.segmented { display: inline-flex; padding: 3px; border-radius: var(--r-pill); background: var(--sunken); box-shadow: inset 0 0 0 1px var(--hairline); }
+.segmented label { position: relative; cursor: pointer; }
+.segmented input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.segmented span { display: block; padding: 6px 16px; border-radius: var(--r-pill); font-size: 12.5px; font-weight: 560; color: var(--ink-soft); }
+.segmented input:checked + span { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--hairline-strong); font-weight: 620; }
+.segmented input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.account__dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 4px var(--brand-wash); }
+.account__text { flex: 1; min-width: 0; }
+.signout { width: auto; margin-top: 14px; min-height: 36px; padding: 0 16px; border-radius: var(--r-pill); font-size: 12.5px; }
+.about { margin-top: 16px; color: var(--muted); font-size: 11.5px; }
+.about a { color: inherit; text-underline-offset: 2px; }
+
+.spanels { padding: 14px 18px 14px; }
+.spanel__title { font-size: 16px; }
+.spanel__lead { margin-bottom: 4px; }
+.spanel .switch { padding: 9px 0; }
+.srow { padding: 9px 0; }
+.spanel > :last-child { border-bottom: 0; }
+.paused { padding-top: 8px; }
+
+.snav button { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; }
+.snav button svg { flex: none; opacity: .8; }
+.snav button[aria-selected='true'] svg { opacity: 1; }
+.bar .icon-button svg { transition: transform 260ms var(--ease); }
+.bar .icon-button[aria-expanded='true'] svg { transform: rotate(60deg); }
+
+/* Il sito sta accanto al nome; l'ingranaggio resta solo, all'estremo destro. */
+.bar__site { margin-left: 4px; margin-right: auto; }
+.bar .icon-button { margin-right: -2px; }
+
+.row__badge--none svg { width: 16px; height: 16px; stroke-width: 1.8; }
+.row__badge--lg.row__badge--none svg { width: 21px; height: 21px; }
+
+
+/* ====================================================================== *
+ * Mobile: Firefox per Android, Chrome/Edge/Kiwi su telefono
+ *
+ * Sul telefono il popup non e' una finestrella di 600x480: e' una pagina a
+ * tutto schermo. Le due colonne diventano due passaggi (elenco, poi dettaglio
+ * con "indietro"), ogni bersaglio da toccare sta almeno a 44px, e i campi
+ * stanno a 16px perche' sotto quella misura il browser ingrandisce la pagina
+ * da solo quando ci si scrive dentro. `html.mobile` lo mette popup.js appena
+ * parte, guardando il puntatore e non la larghezza: la larghezza di un popup
+ * desktop e' quella che decidiamo noi.
+ * ====================================================================== */
+
+html.mobile,
+html.mobile body {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+}
+html.mobile { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html.mobile body {
+  font-size: 15px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+html.mobile * { -webkit-touch-callout: none; }
+
+/* Barra in alto */
+html.mobile .bar { height: 56px; padding: 0 6px 0 16px; }
+html.mobile .bar__name { font-size: 17px; }
+html.mobile .bar__site { font-size: 12.5px; padding: 5px 12px; max-width: 52%; }
+html.mobile .bar .icon-button { width: 44px; height: 44px; margin-right: 0; }
+html.mobile .bar .icon-button svg { width: 22px; height: 22px; }
+
+/* Schermate: una colonna, il fondo rispetta la barra di sistema */
+html.mobile .screen--split {
+  flex-direction: column;
+  gap: 0;
+  padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+}
+html.mobile .pane--list,
+html.mobile .pane--detail { width: 100%; flex: 1; min-height: 0; }
+html.mobile .screen--split[data-view='list'] .pane--detail { display: none; }
+html.mobile .screen--split[data-view='detail'] .pane--list { display: none; }
+html.mobile .pane--detail { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+html.mobile .list { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* Ricerca */
+html.mobile .search { height: 48px; padding: 0 6px 0 16px; }
+html.mobile .search input { font-size: 16px; }
+html.mobile .search__clear { width: 36px; height: 36px; }
+html.mobile .search__clear svg { width: 16px; height: 16px; }
+
+/* Righe: grandi, e la copia sempre visibile (non c'e' hover per farla comparire) */
+html.mobile .list li { margin-bottom: 8px; }
+html.mobile .row { min-height: 64px; padding: 10px 62px 10px 12px; gap: 12px; }
+html.mobile .row__badge { width: 40px; height: 40px; border-radius: 12px; font-size: 15px; }
+html.mobile .row__title { font-size: 15px; }
+html.mobile .row__sub { font-size: 12.5px; }
+html.mobile .row__text { padding-right: 0; }
+html.mobile .row[aria-selected='true'] { box-shadow: inset 0 0 0 1px var(--hairline) !important; }
+html.mobile .row__copy {
+  opacity: 1;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  background: var(--sunken);
+  box-shadow: none;
+}
+html.mobile .row__copy svg { width: 18px; height: 18px; }
+html.mobile .list__heading { font-size: 12px; padding: 12px 4px 6px; }
+
+/* Il bottone principale, fisso in basso a portata di pollice */
+html.mobile .pane__foot { padding: 10px 0 0; background: var(--page, var(--paper)); }
+html.mobile .pane__foot .button { min-height: 54px; font-size: 16px; }
+html.mobile .error { font-size: 13px; }
+
+/* Dettaglio a schermo intero, con "indietro" */
+.detail__back { display: none; }
+html.mobile .detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin: 2px 0 0 -8px;
+  padding: 0 14px 0 6px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+html.mobile .detail__back:active { background: var(--brand-wash); }
+html.mobile .detail { padding: 6px 16px calc(18px + env(safe-area-inset-bottom)); }
+html.mobile .detail__whotext strong { font-size: 16px; }
+html.mobile .address-copy { min-height: 54px; font-size: 16px; }
+html.mobile .detail__row { min-height: 52px; font-size: 15px; }
+html.mobile .detail__block input { min-height: 48px; font-size: 16px; }
+html.mobile input[type='text'],
+html.mobile input[type='search'],
+html.mobile select { font-size: 16px; min-height: 48px; }
+html.mobile .toggle { width: 52px; height: 32px; }
+html.mobile .toggle::after { width: 26px; height: 26px; }
+html.mobile .toggle[aria-checked='true']::after { transform: translateX(20px); }
+html.mobile .detail__foot > .button--danger { min-height: 48px; font-size: 15px; padding: 0 14px; }
+html.mobile .row-actions .button { min-height: 48px; font-size: 15px; }
+
+/* Impostazioni: schede in orizzontale sopra, pannello sotto */
+html.mobile .screen--settings { padding: 0 12px calc(12px + env(safe-area-inset-bottom)); }
+html.mobile .settings__layout { flex-direction: column; gap: 8px; }
+html.mobile .snav {
+  width: auto;
+  flex-direction: row;
+  gap: 6px;
+  padding: 2px 0 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+html.mobile .snav::-webkit-scrollbar { display: none; }
+html.mobile .snav button { width: auto; flex: none; min-height: 44px; padding: 0 16px 0 12px; font-size: 14.5px; white-space: nowrap; }
+html.mobile .spanels { padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); overscroll-behavior: contain; }
+html.mobile .spanel__title { font-size: 19px; }
+html.mobile .spanel__lead { font-size: 13.5px; }
+html.mobile .spanel .switch { padding: 14px 0; gap: 14px; }
+html.mobile .switch__text strong { font-size: 15px; }
+html.mobile .switch__text small { font-size: 12.5px; }
+html.mobile .switch input { inset: 0; width: 100%; height: 100%; }
+html.mobile .switch__track { width: 48px; height: 28px; margin-top: 0; }
+html.mobile .switch__track::after { top: 3px; left: 3px; width: 22px; height: 22px; }
+html.mobile .switch input:checked + .switch__track::after { transform: translateX(20px); }
+html.mobile .srow { padding: 12px 0; }
+html.mobile .srow strong, html.mobile .paused__head strong, html.mobile .account strong { font-size: 15px; }
+html.mobile .srow small, html.mobile .account small { font-size: 12.5px; }
+html.mobile .chip-button { min-height: 44px; padding: 0 18px; font-size: 14px; }
+html.mobile .segmented span { padding: 11px 20px; font-size: 14.5px; }
+html.mobile .paused__list li { min-height: 48px; font-size: 14.5px; }
+html.mobile .paused__empty { font-size: 12.5px; }
+html.mobile .signout { min-height: 48px; font-size: 15px; width: 100%; }
+html.mobile .pair { grid-template-columns: 1fr; }
+html.mobile .field__label { font-size: 13.5px; }
+html.mobile .field__hint { font-size: 12.5px; }
+
+/* Cose da tastiera fisica, che sul telefono non esistono */
+html.mobile .desktop-only { display: none !important; }
+
+html.mobile .screen--center { padding: 24px 20px; }
+html.mobile .prompt { max-width: 34ch; }
+html.mobile .prompt h1 { font-size: 24px; }
+html.mobile .prompt p { font-size: 15px; }
+html.mobile .prompt .button { min-height: 54px; font-size: 16px; width: 100%; }
