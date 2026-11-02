@@ -186,19 +186,56 @@ export function iconPosition(rect, shift) {
 }
 
 /**
+ * Larghezza vera del menu su questo schermo.
+ *
+ * 250 su un puntatore preciso, 300 su un dito (le righe sono piu' alte e il
+ * testo piu' grande), e mai piu' larga dello schermo meno un margine: su un
+ * telefono stretto o con la pagina ingrandita la misura fissa usciva dal bordo.
+ */
+export function menuWidth() {
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  const room = document.documentElement.clientWidth - VIEWPORT_MARGIN * 2
+  return Math.max(0, Math.min(coarse ? 300 : MENU_WIDTH, room))
+}
+
+/** Altezza presunta finche' il menu non e' disegnato e misurabile. */
+const MENU_GUESS_HEIGHT = 150
+
+/**
  * Posizione del menu: sotto il campo, allineato a sinistra con esso.
  *
  * Con un margine, pero'. Un campo vicino al bordo destro della finestra, che
  * su un modulo stretto o su una finestra affiancata capita spesso, mandava il
  * menu meta' fuori dallo schermo: le righe finivano dove non si possono
  * premere, e non c'era modo di accorgersene se non provandolo li'.
+ *
+ * E sul telefono sotto il campo c'e' spesso la tastiera. Su Chrome per Android
+ * la tastiera restringe la vista visibile ma non la pagina, quindi "sotto il
+ * campo" puo' voler dire dietro la tastiera, dove non si tocca niente. Si
+ * misura lo spazio nella vista visibile (`visualViewport`) e, se sotto non ci
+ * sta e sopra si', il menu va sopra.
+ *
+ * @param {DOMRect} rect    il rettangolo del campo
+ * @param {number} [height] altezza del menu, se gia' disegnato
  */
-export function menuPosition(rect) {
+export function menuPosition(rect, height = 0) {
+  const width = menuWidth()
   const room = document.documentElement.clientWidth
-  const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, room - MENU_WIDTH - VIEWPORT_MARGIN))
+  const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, room - width - VIEWPORT_MARGIN))
+
+  const need = (height || MENU_GUESS_HEIGHT) + 5
+  const view = window.visualViewport
+  const visibleTop = view ? view.offsetTop : 0
+  const visibleBottom = view ? view.offsetTop + view.height : window.innerHeight
+
+  const below = visibleBottom - rect.bottom - VIEWPORT_MARGIN
+  const above = rect.top - visibleTop - VIEWPORT_MARGIN
+  const goAbove = below < need && above > below && above >= Math.min(need, 120)
+
+  const top = goAbove ? Math.max(visibleTop + VIEWPORT_MARGIN, rect.top - need) : rect.bottom + 5
 
   return {
     left: left + window.scrollX,
-    top: rect.bottom + window.scrollY + 5,
+    top: top + window.scrollY,
   }
 }

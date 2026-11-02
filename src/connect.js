@@ -133,7 +133,12 @@ async function offerFieldIcon() {
     granted = false
   }
 
-  if (granted) return show('done')
+  // Gia' concesso (secondo collegamento, o permesso dato altrove): niente da
+  // chiedere, ma l'icona deve essere accesa davvero, non solo permessa.
+  if (granted) {
+    await enableFieldIcon()
+    return show('done')
+  }
 
   show('icon')
 }
@@ -156,7 +161,7 @@ async function acceptFieldIcon() {
   } catch {
     // Qui il permesso e' davvero il problema: e' la richiesta stessa che ha
     // fallito.
-    $('icon-error').textContent = 'Firefox did not let that through. You can turn it on later in settings.'
+    $('icon-error').textContent = 'Your browser did not let that through. You can turn it on later in settings.'
     $('icon-error').hidden = false
     return
   }
@@ -167,27 +172,30 @@ async function acceptFieldIcon() {
     return show('done')
   }
 
-  // Il permesso e' gia' concesso, da qui in poi si tratta solo di salvare
-  // l'interruttore. Su Gecko concedere un permesso host puo' far ripartire il
-  // contesto di sfondo proprio in questo istante, e il primo messaggio
-  // spedito subito dopo puo' trovare nessuno ad ascoltare: non e' un rifiuto
-  // del permesso (che e' gia' avvenuto), quindi non si mostra quell'errore.
-  // Si riprova in silenzio poche volte, perche' lo sfondo si sveglia in
-  // frazioni di secondo.
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // Il permesso e' concesso: da qui l'icona si accende da sola, e non dipende
+  // da altro che dallo sfondo.
+  await enableFieldIcon()
+  show('done')
+}
+
+/**
+ * Accende l'icona: registra lo script e lo mette nelle schede aperte.
+ *
+ * Su Gecko concedere un permesso host puo' far ripartire lo sfondo proprio in
+ * questo istante, e il primo messaggio puo' trovare nessuno ad ascoltare. Non
+ * e' un rifiuto, quindi non e' un errore da mostrare: si riprova in silenzio.
+ * E non serve nemmeno che riesca, per l'icona: lo sfondo, alla ripartenza,
+ * rilegge il permesso e si accende da solo (vedi `alignIconSetting`).
+ */
+async function enableFieldIcon() {
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      await send('SET_SETTINGS', { patch: { injectIcon: true } })
-      return show('done')
+      await send('ENABLE_FIELD_ICON')
+      return
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 300))
     }
   }
-
-  // Anche se il salvataggio non e' andato a segno, il permesso resta
-  // concesso: l'interruttore nelle impostazioni del popup rimanda lo stesso
-  // messaggio e funziona, perche' a quel punto lo sfondo e' sveglio da un
-  // pezzo. Non si mostra un errore per qualcosa che si risolve da solo.
-  show('done')
 }
 
 function expire() {

@@ -13,7 +13,8 @@ import { INSTANCE } from './shared/config.js'
 import * as cooldown from './shared/cooldown.js'
 import { registrableDomain, siteFromUrl } from './shared/domain.js'
 import { relatedSites } from './shared/related-sites.js'
-import { forgetIcons, resolveIcons } from './shared/icons.js'
+import { forgetIcons, pendingIcons, resolveIcons } from './shared/icons.js'
+import { parseServerTime } from './shared/time.js'
 import { forgetSecret, rememberSecret, readSecret } from './shared/pairing.js'
 import { clearToken, getSettings, getToken, setSettings, setToken } from './shared/storage.js'
 
@@ -173,15 +174,26 @@ async function createAlias({ site = '', fresh = false } = {}) {
   const root = settings.associateSite ? registrableDomain(site) : ''
 
   const startedAt = Date.now()
+  const body = {
+    domain: settings.domain,
+    format: settings.format,
+    description: settings.describeWithSite && site ? site : '',
+    site: root ? site : '',
+    siteRoot: root,
+  }
+
   let alias
   try {
-    alias = await skudo.createAlias({
-      domain: settings.domain,
-      format: settings.format,
-      description: settings.describeWithSite && site ? site : '',
-      site: root ? site : '',
-      siteRoot: root,
-    })
+    try {
+      alias = await skudo.createAlias(body)
+    } catch (error) {
+      // L'associazione al sito e' un di piu': se il server non la accetta
+      // (un host che non e' un dominio, una radice che non riconosce) l'alias
+      // si crea lo stesso, senza. Rinunciare a tutto per un'icona sarebbe il
+      // difetto peggiore possibile.
+      if (error.code !== 'INVALID' || !['site', 'site_root'].includes(error.field)) throw error
+      alias = await skudo.createAlias({ ...body, site: '', siteRoot: '' })
+    }
   } catch (error) {
     // Un 5xx o una risposta persa non vuol dire che l'alias non sia stato
     // creato: il server puo' aver scritto la riga e poi fallito dopo. Mostrare
@@ -197,6 +209,10 @@ async function createAlias({ site = '', fresh = false } = {}) {
     email: aliasEmail(alias),
     description: alias.description || '',
     site: alias.site || (root ? site : ''),
+    // Senza questo il popup leggeva `undefined` come "spento" e barrava
+    // l'alias appena nato.
+    active: alias.active !== false,
+    createdAt: alias.created_at || new Date().toISOString(),
   }
 
   await noteCreation()
@@ -208,18 +224,24 @@ async function createAlias({ site = '', fresh = false } = {}) {
 
 /**
  * L'alias creato in questo istante, se il server l'ha creato ma non l'ha detto.
- * La finestra di dieci secondi assorbe lo scarto fra l'orologio del server e
- * il nostro.
+ *
+ * Si riprova un paio di volte: dopo un 5xx la riga puo' non essere ancora
+ * visibile alla prima lettura. L'orario va letto come UTC (vedi
+ * src/shared/time.js) e la finestra di un minuto assorbe lo scarto fra
+ * l'orologio del server e il nostro.
  */
 async function findJustCreated(skudo, startedAt) {
-  try {
-    const recent = await skudo.recentAliases()
-    return (
-      recent.find((entry) => Date.parse(entry.created_at) >= startedAt - 10000) || null
-    )
-  } catch {
-    return null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 700))
+    try {
+      const recent = await skudo.recentAliases()
+      const found = recent.find((entry) => parseServerTime(entry.created_at) >= startedAt - 60000)
+      if (found) return found
+    } catch {
+      /* si riprova */
+    }
   }
+  return null
 }
 
 /** La forma con cui un alias esce da qui. Mai più campi di quelli che servono. */
@@ -345,7 +367,7 @@ const handlers = {
    * canale stretto e indiretto, e non c'e' motivo di lasciarlo aperto, perche'
    * il pannello dentro le pagine le icone non le disegna.
    */
-  async SITE_ICONS({ sites }, sender) {
+  async SITE_ICONS({ sites, retry = false }, sender) {
     if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
 
     const { siteIcons } = await getSettings()
@@ -353,7 +375,10 @@ const handlers = {
 
     const wanted = (Array.isArray(sites) ? sites : []).filter((site) => typeof site === 'string')
 
-    return resolveIcons(wanted)
+    const icons = await resolveIcons(wanted, { retry: retry === true })
+    // Chi disegna deve sapere se c'e' qualcosa che arrivera' fra poco, per
+    // programmare un secondo giro invece di restare sulle lettere.
+    return { icons, pending: await pendingIcons(wanted) }
   },
 
   /**
@@ -365,6 +390,20 @@ const handlers = {
    */
   async OPEN_CONNECT() {
     await api.tabs.create({ url: api.runtime.getURL('connect.html') })
+    return { opened: true }
+  },
+
+  /** Svuota le icone tenute sul disco. Solo dal popup. */
+  async CLEAR_ICONS(_message, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+    await forgetIcons()
+    return { cleared: true }
+  },
+
+  /** Apre l'app Skudo in una scheda. Solo dal popup. */
+  async OPEN_APP(_message, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+    await api.tabs.create({ url: INSTANCE })
     return { opened: true }
   },
 
@@ -401,7 +440,8 @@ const handlers = {
     return { paused: host }
   },
 
-  async RESUME_SITE({ site }) {
+  async RESUME_SITE({ site }, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
     const { pausedSites = [] } = await getSettings()
     await setSettings({ pausedSites: pausedSites.filter((entry) => entry !== site) })
     return { resumed: site }
@@ -513,6 +553,9 @@ const handlers = {
     // significherebbe continuare a leggere ogni pagina per un'estensione che
     // non può più fare niente.
     await setSettings({ injectIcon: false })
+    // Il permesso va via con lui, altrimenti `alignIconSetting` lo
+    // rileggerebbe e riaccenderebbe l'icona per un'estensione scollegata.
+    await api.permissions.remove({ origins: ['<all_urls>'] }).catch(() => {})
     return { signedIn: false }
   },
 
@@ -539,14 +582,32 @@ const handlers = {
     return aliases.map(describeAlias)
   },
 
-  /** Ricerca fra i propri alias. Anche questa solo dal popup. */
+  /**
+   * Ricerca fra i propri alias. Anche questa solo dal popup.
+   *
+   * Il server cerca nell'indirizzo e nella nota, mai nel sito (che vive in un
+   * indice cieco). Chi scrive `amazon.it` cerca un sito, non un testo: se il
+   * termine ha la forma di un dominio si interroga anche l'indice del sito e
+   * si uniscono i due risultati, quello per sito per primo.
+   */
   async SEARCH_ALIASES({ query }, sender) {
     if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
     const term = typeof query === 'string' ? query.trim().slice(0, 100) : ''
     if (!term) return handlers.RECENT_ALIASES({}, sender)
     const skudo = await client()
-    const aliases = await skudo.searchAliases(term)
-    return aliases.map(describeAlias)
+
+    const host = term.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[/?#].*$/, '').replace(/^www\./i, '')
+    const group = /^[^\s@]+\.[^\s@.]{2,}$/.test(host) ? siteGroup(host) : []
+
+    const [bySite, byText] = await Promise.all([
+      group.length ? skudo.findAliasesForSite(group).catch(() => []) : [],
+      skudo.searchAliases(term),
+    ])
+
+    const seen = new Set()
+    return [...bySite, ...byText]
+      .filter((alias) => !seen.has(alias.id) && seen.add(alias.id))
+      .map(describeAlias)
   },
 
   async SET_ALIAS_ACTIVE({ id, active }, sender) {
@@ -579,6 +640,21 @@ const handlers = {
       siteRoot: ours ? siteRoot : '',
     })
     return { id, site: ours ? site : '' }
+  },
+
+  /**
+   * "Turn it on", dal lato dello sfondo.
+   *
+   * La pagina ha gia' ottenuto il permesso dal browser; qui si registra lo
+   * script e lo si mette nelle schede aperte, senza aspettare l'evento
+   * `permissions.onAdded`, che su alcuni motori arriva tardi o non arriva.
+   */
+  async ENABLE_FIELD_ICON(_message, sender) {
+    if (!fromOurOwnUi(sender)) throw new ApiError('Not available here.', { code: 'FORBIDDEN' })
+    if (!(await hasPagePermission())) return { enabled: false }
+    await sync()
+    await injectIntoOpenTabs()
+    return { enabled: true }
   },
 
   async DELETE_ALIAS({ id }, sender) {
@@ -668,33 +744,97 @@ api.contextMenus?.onClicked.addListener((info, tab) => {
  * fatto l'accesso. Qui viene registrato solo quando l'utente accende l'icona nei
  * campi, e solo dopo che ha concesso il permesso.
  */
-async function syncContentScript() {
+async function hasPagePermission() {
+  try {
+    return await api.permissions.contains({ origins: ['<all_urls>'] })
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Il permesso e' la fonte di verita', l'impostazione ne e' lo specchio.
+ *
+ * Prima l'icona si accendeva solo se *due* cose erano vere insieme: il
+ * permesso concesso e `injectIcon` salvato. Salvarlo era un messaggio
+ * separato, spedito dalla pagina di collegamento o dal popup dopo la
+ * risposta del browser, e quel messaggio si perdeva spesso: su Chromium il
+ * popup si chiude appena compare la richiesta, su Gecko lo sfondo puo'
+ * ripartire proprio in quel momento. Risultato: permesso dato, "Turn it on"
+ * premuto, e nessuna icona.
+ *
+ * Qui chi concede il permesso ha acceso l'icona, punto. Non esiste un modo di
+ * avere il permesso e non volere l'icona: spegnere l'interruttore toglie il
+ * permesso. Quindi a ogni avvio e a ogni cambio di permesso le due cose si
+ * riallineano da sole, senza dipendere dal messaggio giusto al momento giusto.
+ */
+async function alignIconSetting(granted) {
   const { injectIcon } = await getSettings()
-  const granted = await api.permissions.contains({ origins: ['<all_urls>'] })
+  if (injectIcon !== granted) await setSettings({ injectIcon: granted })
+}
+
+async function syncContentScript() {
+  const granted = await hasPagePermission()
+  await alignIconSetting(granted)
 
   const existing = await api.scripting
     .getRegisteredContentScripts({ ids: [CONTENT_SCRIPT_ID] })
     .catch(() => [])
 
-  if (!injectIcon || !granted) {
+  if (!granted) {
     if (existing.length) await api.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] })
     return
   }
 
-  if (existing.length) return
+  if (!existing.length) {
+    await api.scripting.registerContentScripts([
+      {
+        id: CONTENT_SCRIPT_ID,
+        js: ['content.js'],
+        matches: ['<all_urls>'],
+        runAt: 'document_idle',
+        allFrames: true,
+        // Gecko: sopravvive al riavvio del browser. Chromium lo fa sempre.
+        persistAcrossSessions: true,
+      },
+    ])
+  }
+}
 
-  await api.scripting.registerContentScripts([
-    {
-      id: CONTENT_SCRIPT_ID,
-      js: ['content.js'],
-      matches: ['<all_urls>'],
-      runAt: 'document_idle',
-      allFrames: true,
-    },
-  ])
+/**
+ * Mette l'icona anche nelle schede gia' aperte.
+ *
+ * Un content script registrato parte solo sulle pagine che si caricano da
+ * adesso in poi. Chi preme "Turn it on" ha davanti le schede che aveva aperte,
+ * e se nessuna ha l'icona la prima impressione e' che non abbia funzionato. Su
+ * mobile pesa di piu': li' le schede restano aperte per giorni.
+ *
+ * `content.js` si protegge da solo dalla doppia esecuzione, quindi una scheda
+ * dove lo script e' gia' arrivato non ne paga niente.
+ */
+async function injectIntoOpenTabs() {
+  if (!api.scripting?.executeScript || !api.tabs?.query) return
+  let tabs = []
+  try {
+    tabs = await api.tabs.query({ url: ['http://*/*', 'https://*/*'] })
+  } catch {
+    return
+  }
+  await Promise.allSettled(
+    tabs.map((tab) =>
+      api.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        files: ['content.js'],
+      })
+    )
+  )
 }
 
 async function syncContextMenu() {
+  // Firefox per Android non ha il menu contestuale: li' non c'e' niente da
+  // registrare, e chiamare `removeAll` su un oggetto che non esiste farebbe
+  // fallire tutta la sincronizzazione.
+  if (!api.contextMenus?.removeAll) return
   const { contextMenu } = await getSettings()
   await api.contextMenus.removeAll()
   if (!contextMenu) return
@@ -706,7 +846,7 @@ async function syncContextMenu() {
 }
 
 async function sync() {
-  await Promise.all([syncContentScript(), syncContextMenu()])
+  await Promise.allSettled([syncContentScript(), syncContextMenu()])
 }
 
 api.runtime.onInstalled.addListener(sync)
@@ -714,5 +854,13 @@ api.runtime.onStartup.addListener(sync)
 api.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && ('injectIcon' in changes || 'contextMenu' in changes)) sync()
 })
-api.permissions.onAdded.addListener(sync)
+api.permissions.onAdded.addListener(async () => {
+  await sync()
+  if (await hasPagePermission()) await injectIntoOpenTabs()
+})
 api.permissions.onRemoved.addListener(sync)
+
+// A ogni risveglio, oltre che a installazione e avvio: costa una lettura, e
+// ripara da solo uno script registrato che il browser si e' dimenticato.
+sync().catch(() => {})
+

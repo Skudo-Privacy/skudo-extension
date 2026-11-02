@@ -34,6 +34,19 @@ import { api } from './shared/browser.js'
 import { registrableDomain } from './shared/domain.js'
 import { isThirdPartyCredentialFrame } from './shared/related-sites.js'
 
+/**
+ * Una sola copia per pagina.
+ *
+ * Lo script arriva da due strade: la registrazione (pagine che si aprono da
+ * ora) e `executeScript` (schede gia' aperte quando si accende l'icona). Su una
+ * pagina dove arrivano tutte e due, senza questo ci sarebbero due icone una
+ * sopra l'altra, che e' proprio il difetto che anchor.js passa il tempo a
+ * evitare.
+ */
+const GUARD = '__skudoFieldIcon'
+const alreadyRunning = globalThis[GUARD] === true
+globalThis[GUARD] = true
+
 /** Quanti fotogrammi immobili prima di spegnere il ciclo. */
 const IDLE_FRAMES_BEFORE_STOP = 20
 
@@ -208,8 +221,8 @@ function place(entry) {
     entry.icon.setReady()
   }
 
-  if (entry.menu) entry.menu.move(menuPosition(rect))
-  if (toast && toast.anchor === entry) toast.ui.move(menuPosition(rect))
+  if (entry.menu) entry.menu.move(menuPosition(rect, entry.menu.height()))
+  if (toast && toast.anchor === entry) toast.ui.move(menuPosition(rect, toast.ui.height()))
 
   const moved = !settled || entry.moved
   entry.moved = false
@@ -302,6 +315,10 @@ function menuFor(entry) {
     document.body.appendChild(entry.menu.host)
     entry.menu.move(menuPosition(entry.input.getBoundingClientRect()))
     openMenu = entry
+    // Il menu non ha ancora le righe, quindi non ha un'altezza: un ricalcolo
+    // appena disegnato lo mette dove deve stare (sopra, se sotto c'e' la
+    // tastiera).
+    schedule()
   }
   return entry.menu
 }
@@ -352,7 +369,7 @@ function showToast(entry, alias) {
   })
 
   document.body.appendChild(ui.host)
-  ui.move(menuPosition(entry.input.getBoundingClientRect()))
+  ui.move(menuPosition(entry.input.getBoundingClientRect(), ui.height()))
   toast = { ui, anchor: entry }
   toastTimer = setTimeout(clearToast, TOAST_LIFE_MS)
   schedule()
@@ -363,7 +380,11 @@ function showToast(entry, alias) {
  * ------------------------------------------------------------------ */
 
 function setValue(input, value) {
-  input.focus()
+  // Con un dito il fuoco non si riprende: farebbe risalire la tastiera sopra
+  // il messaggio con l'indirizzo, proprio quando va letto. Il campo si riempie
+  // lo stesso, perche' i moduli ascoltano gli eventi e non il fuoco.
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  if (!touch) input.focus()
   input.value = value
   // I framework a componenti non guardano `value`, guardano gli eventi. Senza
   // questi due il campo appare pieno ma il modulo si invia vuoto.
@@ -647,6 +668,12 @@ async function start() {
   const wake = () => schedule()
   addEventListener('scroll', wake, { passive: true, capture: true })
   addEventListener('resize', wake, { passive: true })
+  // La tastiera del telefono e lo zoom a due dita cambiano la vista visibile
+  // senza far scattare `resize` sulla finestra: senza questi, il menu resta
+  // dove stava, dietro la tastiera.
+  window.visualViewport?.addEventListener('resize', wake, { passive: true })
+  window.visualViewport?.addEventListener('scroll', wake, { passive: true })
+  addEventListener('orientationchange', wake, { passive: true })
   addEventListener('transitionend', wake, { passive: true, capture: true })
   addEventListener('animationend', wake, { passive: true, capture: true })
 
@@ -663,7 +690,9 @@ async function start() {
   }).observe(document.documentElement, { childList: true, subtree: true })
 }
 
-if (document.readyState === 'loading') {
+if (alreadyRunning) {
+  // Gia' attivo in questa pagina: niente da fare.
+} else if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', start, { once: true })
 } else {
   start()

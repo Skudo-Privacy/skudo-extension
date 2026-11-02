@@ -235,3 +235,48 @@ body.connect {
 /* Il rifiuto ha la stessa dimensione dell'accettazione. Un "non ora" piccolo e
    grigio accanto a un bottone grande e' una scelta finta. */
 .row-buttons .button { flex: 1; }
+
+/* Telefono ---------------------------------------------------------------
+ * La pagina e' una scheda come un'altra: sotto i 520px il foglio diventa lo
+ * schermo, i bottoni si impilano e restano a portata di pollice, e nessun
+ * campo scende sotto i 16px (sotto, il browser ingrandisce la pagina da solo).
+ */
+@media (max-width: 520px), (pointer: coarse) {
+  body.connect {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) 0 0;
+    background: var(--paper);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .sheet {
+    max-width: none;
+    min-height: calc(100dvh - 16px);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .sheet__head { margin-bottom: 20px; font-size: 15px; }
+  .step { display: flex; flex-direction: column; flex: 1; }
+  .step[hidden] { display: none; }
+  .step h1 { font-size: 26px; }
+  .step .lede { font-size: 16px; margin-bottom: 18px; }
+  .note { font-size: 13.5px; }
+  .waiting { font-size: 15px; padding: 16px; }
+  .preview__field { height: 48px; font-size: 16px; }
+  .fact span { font-size: 12px; }
+  .row-buttons {
+    flex-direction: column-reverse;
+    margin-top: auto;
+    padding-top: 20px;
+  }
+  .row-buttons .button,
+  .step > .button { min-height: 54px; font-size: 16px; }
+  .step > .button { margin-top: auto; }
+  .step > .button + .note { margin-top: 14px; }
+  .tick { margin-left: 0; }
+}

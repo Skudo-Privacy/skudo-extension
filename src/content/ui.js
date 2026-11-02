@@ -314,6 +314,8 @@ ${TOKENS}
   border-radius: var(--radius);
   background: var(--paper);
   box-shadow: var(--shadow);
+  /* Il filo in fondo segue l'angolo arrotondato invece di spuntarne fuori. */
+  overflow: hidden;
   animation: rise 170ms var(--ease);
 }
 .toast__mark { flex: none; display: block; }
@@ -343,11 +345,44 @@ ${TOKENS}
   position: absolute; left: 0; right: 0; bottom: 0;
   height: 2px;
   transform-origin: left;
-  background: var(--signal);
+  background: var(--brand);
+  opacity: .55;
   animation: drain var(--life, 7000ms) linear both;
 }
 @keyframes drain { from { transform: scaleX(1) } to { transform: scaleX(0) } }
 .toast { position: relative; }
+
+/* ------------------------------------------------------------------ *
+ * Dita, non puntatori
+ *
+ * Su telefono non c'e' hover per far "accendere" l'icona e un dito copre
+ * quaranta pixel, non sedici. L'icona resta ben visibile, la zona che risponde
+ * al tocco esce dai suoi bordi (senza ingrandire il disegno nel campo), le
+ * righe del menu arrivano ai 48px e i caratteri a una misura leggibile senza
+ * zoom. Si guarda il puntatore, non la larghezza: una finestra stretta su
+ * desktop resta desktop.
+ * ------------------------------------------------------------------ */
+
+.menu, .toast { max-width: calc(100vw - 16px); }
+
+@media (pointer: coarse) {
+  .menu, .toast { width: min(300px, calc(100vw - 16px)); }
+  .icon { position: relative; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .icon[data-ready='true'] { opacity: .9; }
+  .icon::after { content: ''; position: absolute; inset: -12px; }
+  .head { height: 44px; }
+  .ghost { width: 40px; height: 40px; }
+  .rows { max-height: min(60vh, 320px); -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .row { min-height: 52px; padding: 11px 14px; align-items: center; gap: 12px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .row:active:not(:disabled) { background: var(--label); }
+  .row__icon { width: 32px; height: 32px; }
+  .row__title { font-size: 15px; }
+  .row__sub, .row__sub .address__text { font-size: 13px; }
+  .toast { padding: 12px 10px 12px 14px; }
+  .toast__title { font-size: 13.5px; }
+  .toast__address { font-size: 13px; }
+  .toast__undo { min-height: 40px; padding: 0 16px; font-size: 14px; }
+}
 
 /* ------------------------------------------------------------------ *
  * Tema scuro
@@ -422,6 +457,10 @@ export function createIcon({ title, onActivate }) {
   button.className = 'icon'
   button.title = title
   button.setAttribute('aria-label', title)
+  // Toccare l'icona non deve togliere il fuoco al campo: su telefono vorrebbe
+  // dire far sparire la tastiera e ridisegnare la pagina sotto il dito proprio
+  // un istante prima del clic, che a quel punto finisce altrove.
+  button.addEventListener('mousedown', (event) => event.preventDefault())
   button.addEventListener('click', (event) => {
     event.preventDefault()
     event.stopPropagation()
@@ -588,6 +627,9 @@ export function createMenu({ onPause } = {}) {
       host.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
     },
 
+    /** Altezza disegnata, per decidere se sta sotto il campo o va sopra. */
+    height: () => host.offsetHeight,
+
     /**
      * Disegna il menu.
      *
@@ -678,6 +720,7 @@ export function createToast({ email, onUndo, life = 7000 }) {
     move({ left, top }) {
       host.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
     },
+    height: () => host.offsetHeight,
     remove: () => host.remove(),
   }
 }
